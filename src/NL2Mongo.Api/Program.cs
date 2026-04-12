@@ -143,4 +143,151 @@ app.MapPost("/segments/preview", async (
         .ToApiResult();
 });
 
+app.MapPost("/segments/evaluate", async (
+    IWebHostEnvironment env,
+    IMongoClient client,
+    SchemaInspector inspector,
+    OllamaService ollama) =>
+{
+    var suitePath = Path.Combine(env.ContentRootPath, "EvaluationSuite.json");
+    if (!File.Exists(suitePath))
+        return Results.NotFound(new { error = "EvaluationSuite.json not found" });
+
+    var suite = System.Text.Json.JsonSerializer.Deserialize<List<EvaluationCase>>(
+        await File.ReadAllTextAsync(suitePath),
+        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+    if (suite is null || suite.Count == 0)
+        return Results.BadRequest(new { error = "Evaluation suite is empty" });
+
+    var results = new List<EvaluationResult>();
+    foreach (var testCase in suite)
+        results.Add(await RunEvaluationCaseAsync(testCase, client, inspector, ollama, jsonSettings));
+
+    var passed = results.Count(r => r.Passed);
+    return Results.Ok(new EvaluationReport(
+        results.Count,
+        passed,
+        results.Count - passed,
+        results.Count > 0 ? Math.Round((double)passed / results.Count * 100, 1) : 0,
+        results));
+});
+
 app.Run();
+
+// ── Evaluation helpers ────────────────────────────────────────────────────────
+
+static async Task<EvaluationResult> RunEvaluationCaseAsync(
+    EvaluationCase testCase,
+    IMongoClient client,
+    SchemaInspector inspector,
+    OllamaService ollama,
+    MongoDB.Bson.IO.JsonWriterSettings jsonSettings)
+{
+    try
+    {
+        var db             = client.GetDatabase(testCase.Tenant);
+        var collectionName = await ResolveCollectionNameAsync(db);
+        var schema         = await inspector.InspectAsync(db, collectionName);
+
+        var filterResult = await ollama.GenerateFilterAsync(testCase.Description, schema);
+        if (!filterResult.IsSuccess)
+            return new EvaluationResult(testCase.Id, testCase.Description, false,
+                $"LLM failed: {filterResult.Error!.Message}", 0, "");
+
+        var validationResult = QueryValidator.Validate(filterResult.Value!);
+        if (!validationResult.IsSuccess)
+            return new EvaluationResult(testCase.Id, testCase.Description, false,
+                $"Validation failed: {validationResult.Error!.Message}", 0, filterResult.Value!);
+
+        var cleanQuery  = validationResult.Value!.ToJson(jsonSettings);
+        var collection  = db.GetCollection<BsonDocument>(collectionName);
+        var docs        = await collection
+            .Find(validationResult.Value!)
+            .Project(Builders<BsonDocument>.Projection.Exclude("_id"))
+            .Limit(200)
+            .ToListAsync();
+
+        var items = docs
+            .Select(d => System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(d.ToJson(jsonSettings)))
+            .ToList();
+
+        if (items.Count < testCase.MinCount)
+            return new EvaluationResult(testCase.Id, testCase.Description, false,
+                $"Expected at least {testCase.MinCount} result(s), got {items.Count}", items.Count, cleanQuery);
+
+        if (testCase.AllMustHave is not null)
+        {
+            foreach (var item in items)
+            {
+                var failedField = CheckMustHave(item, testCase.AllMustHave, mustMatch: true);
+                if (failedField is not null)
+                    return new EvaluationResult(testCase.Id, testCase.Description, false,
+                        $"allMustHave failed on field '{failedField}'", items.Count, cleanQuery);
+            }
+        }
+
+        if (testCase.NoneCanHave is not null)
+        {
+            foreach (var item in items)
+            {
+                var failedField = CheckMustHave(item, testCase.NoneCanHave, mustMatch: false);
+                if (failedField is not null)
+                    return new EvaluationResult(testCase.Id, testCase.Description, false,
+                        $"noneCanHave failed on field '{failedField}'", items.Count, cleanQuery);
+            }
+        }
+
+        return new EvaluationResult(testCase.Id, testCase.Description, true, null, items.Count, cleanQuery);
+    }
+    catch (Exception ex)
+    {
+        return new EvaluationResult(testCase.Id, testCase.Description, false,
+            $"Exception: {ex.Message}", 0, "");
+    }
+}
+
+// Returns the name of the first field that fails the check, or null if all pass.
+// mustMatch=true  → field must equal expected value  (allMustHave)
+// mustMatch=false → field must NOT equal expected value (noneCanHave)
+static string? CheckMustHave(
+    System.Text.Json.JsonElement doc,
+    Dictionary<string, System.Text.Json.JsonElement> assertions,
+    bool mustMatch)
+{
+    foreach (var (field, expected) in assertions)
+    {
+        if (!doc.TryGetProperty(field, out var actual)) return mustMatch ? field : null;
+        var matches = JsonValuesMatch(actual, expected);
+        if (mustMatch && !matches) return field;
+        if (!mustMatch && matches) return field;
+    }
+    return null;
+}
+
+static bool JsonValuesMatch(System.Text.Json.JsonElement actual, System.Text.Json.JsonElement expected)
+{
+    switch (expected.ValueKind)
+    {
+        case System.Text.Json.JsonValueKind.True:
+        case System.Text.Json.JsonValueKind.False:
+            return actual.ValueKind == expected.ValueKind;
+
+        case System.Text.Json.JsonValueKind.String:
+            var expectedStr = expected.GetString();
+            // Array field (e.g. groups): check if value is contained
+            if (actual.ValueKind == System.Text.Json.JsonValueKind.Array)
+                return actual.EnumerateArray().Any(item =>
+                    item.ValueKind == System.Text.Json.JsonValueKind.String &&
+                    item.GetString() == expectedStr);
+            return actual.ValueKind == System.Text.Json.JsonValueKind.String &&
+                   actual.GetString() == expectedStr;
+
+        case System.Text.Json.JsonValueKind.Number:
+            return actual.ValueKind == System.Text.Json.JsonValueKind.Number &&
+                   actual.GetDouble() == expected.GetDouble();
+
+        default:
+            return false;
+    }
+}

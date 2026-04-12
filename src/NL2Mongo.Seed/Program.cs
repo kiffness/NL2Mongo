@@ -5,6 +5,9 @@ using MongoDB.Driver;
 var pack = new ConventionPack { new CamelCaseElementNameConvention() };
 ConventionRegistry.Register("CamelCase", pack, t => true);
 
+// Fixed seed — guarantees identical data on every reseed, required for reliable evaluation tests
+Bogus.Randomizer.Seed = new Random(42);
+
 var client = new MongoClient("mongodb://localhost:27017");
 
 // ── Tenant 1: nl2mongo ────────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ await dunmowContacts.DeleteManyAsync(FilterDefinition<Lead>.Empty);
 Console.WriteLine("Cleared dunmowPropertyGroup.contacts.");
 
 var counties          = new[] { "Essex", "Suffolk", "Norfolk", "Kent", "Surrey", "Hampshire", "Hertfordshire", "Oxfordshire", "Berkshire", "Cambridgeshire" };
-var statuses          = new[] { "Lead", "Active Client", "Past Client", "Cold" };
+var statuses          = new[] { "Lead", "Current Client", "Past Client", "Cold" };
 var propertyInterests = new[] { "Buying", "Selling", "Renting", "Letting" };
 var sources           = new[] { "Referral", "Website", "Auction", "Cold Call", "Social Media" };
 

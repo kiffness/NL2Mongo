@@ -1,0 +1,114 @@
+[
+  {
+    "id": "nl2mongo-active-contacts",
+    "description": "active contacts",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true }
+  },
+  {
+    "id": "nl2mongo-inactive-contacts",
+    "description": "inactive contacts",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": false }
+  },
+  {
+    "id": "nl2mongo-engineers",
+    "description": "engineers",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "occupation": "Engineer" }
+  },
+  {
+    "id": "nl2mongo-nurses",
+    "description": "nurses",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "occupation": "Nurse" }
+  },
+  {
+    "id": "nl2mongo-vip-members",
+    "description": "VIP members",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "groups": "VIP" }
+  },
+  {
+    "id": "nl2mongo-newsletter-subscribers",
+    "description": "contacts in the Newsletter group",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "groups": "Newsletter" }
+  },
+  {
+    "id": "nl2mongo-active-engineers",
+    "description": "active engineers",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "occupation": "Engineer" }
+  },
+  {
+    "id": "nl2mongo-active-vip",
+    "description": "active VIP members",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "groups": "VIP" }
+  },
+  {
+    "id": "nl2mongo-retired",
+    "description": "retired contacts",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "occupation": "Retired" }
+  },
+  {
+    "id": "nl2mongo-active-newsletter-nurses",
+    "description": "active nurses in the Newsletter group",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "occupation": "Nurse", "groups": "Newsletter" }
+  },
+  {
+    "id": "dunmow-active-buyers",
+    "description": "active buyers",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "propertyInterest": "Buying" }
+  },
+  {
+    "id": "dunmow-leads",
+    "description": "leads",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "status": "Lead" }
+  },
+  {
+    "id": "dunmow-referrals",
+    "description": "contacts who came from a referral",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "source": "Referral" }
+  },
+  {
+    "id": "dunmow-essex",
+    "description": "contacts in Essex",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "county": "Essex" }
+  },
+  {
+    "id": "dunmow-active-sellers",
+    "description": "contacts interested in selling who are active",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "propertyInterest": "Selling" }
+  },
+  {
+    "id": "dunmow-active-leads-referral",
+    "description": "active leads from the website",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "status": "Lead", "source": "Website" }
+  }
+]
