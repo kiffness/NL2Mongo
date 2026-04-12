@@ -57,6 +57,7 @@ public class OllamaService(HttpClient http)
     private static string BuildSystemPrompt(SchemaDescription schema)
     {
         var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Today's date is {DateTime.UtcNow:yyyy-MM-dd}.");
         sb.AppendLine("You are a MongoDB query generator. Convert natural language audience descriptions into MongoDB filter documents.");
         sb.AppendLine();
         sb.AppendLine("Collection schema:");
@@ -64,14 +65,21 @@ public class OllamaService(HttpClient http)
         {
             var line = $"- {field.Name}: {field.Type}";
             if (field.SampleValues.Count > 0)
-                line += $" — values: {string.Join(", ", field.SampleValues)}";
+            {
+                var label = field.IsExhaustive ? "values" : "example values";
+                var suffix = field.IsExhaustive ? "" : "…";
+                line += $" — {label}: {string.Join(", ", field.SampleValues)}{suffix}";
+            }
             sb.AppendLine(line);
         }
+        sb.AppendLine();
+        sb.AppendLine("Important: only use exact values that exist in the schema above. Do not invent values or use geographic regions (e.g. 'Europe') as country values — use specific country names instead.");
         sb.AppendLine();
         sb.AppendLine("Rules:");
         sb.AppendLine("- Output ONLY a valid JSON object. No explanation, no markdown, no code blocks.");
         sb.AppendLine("- Use standard MongoDB operators where needed: $gt, $lt, $gte, $lte, $in, $nin, $and, $or, $regex.");
         sb.AppendLine("- For array fields use: {\"fieldName\": \"Value\"} for a single value or {\"fieldName\": {\"$in\": [\"A\",\"B\"]}} for multiple.");
+        sb.AppendLine("- For date comparisons use ISO 8601 strings, e.g. {\"createdAt\": {\"$gte\": \"2024-01-01T00:00:00Z\"}}. Never use ISODate().");
         sb.AppendLine();
         sb.AppendLine("Examples:");
         sb.AppendLine("User: active contacts");

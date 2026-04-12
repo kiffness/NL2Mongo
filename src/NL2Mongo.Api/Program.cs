@@ -113,8 +113,15 @@ app.MapPost("/segments/preview", async (
         .Limit(200)
         .ToListAsync();
 
+    // Serialize the validated BsonDocument back to JSON so the displayed query
+    // is always valid JSON — even if the model emitted ISODate() or other shell syntax.
+    var cleanQuery = validationResult.Value!.ToJson(new MongoDB.Bson.IO.JsonWriterSettings
+    {
+        OutputMode = MongoDB.Bson.IO.JsonOutputMode.RelaxedExtendedJson
+    });
+
     return Result<SegmentPreview>.Ok(
-        new SegmentPreview(matched, matched.Count, filterResult.Value!))
+        new SegmentPreview(matched, matched.Count, cleanQuery))
         .ToApiResult();
 });
 

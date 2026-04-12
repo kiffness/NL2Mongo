@@ -3,7 +3,10 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 
 public record SchemaDescription(IReadOnlyList<FieldDescriptor> Fields);
-public record FieldDescriptor(string Name, string Type, IReadOnlyList<string> SampleValues);
+
+// IsExhaustive = true means SampleValues is the complete set of possible values (enum-like).
+// IsExhaustive = false means SampleValues is just a representative sample — more values exist.
+public record FieldDescriptor(string Name, string Type, IReadOnlyList<string> SampleValues, bool IsExhaustive);
 
 public class SchemaInspector(IMemoryCache cache)
 {
@@ -39,8 +42,13 @@ public class SchemaInspector(IMemoryCache cache)
         var descriptors = fieldTypes.Keys.Select(name =>
         {
             var distinct = fieldValues[name].Distinct().ToList();
-            IReadOnlyList<string> sampleValues = distinct.Count <= 15 ? distinct : [];
-            return new FieldDescriptor(name, fieldTypes[name], sampleValues);
+            var isExhaustive = distinct.Count <= 15;
+            // Always show some sample values so the model knows the data format.
+            // For low-cardinality fields show all values; for high-cardinality show 5.
+            IReadOnlyList<string> sampleValues = distinct.Count > 0
+                ? (isExhaustive ? distinct : distinct.Take(5).ToList())
+                : [];
+            return new FieldDescriptor(name, fieldTypes[name], sampleValues, isExhaustive);
         }).ToList();
 
         var schema = new SchemaDescription(descriptors);
