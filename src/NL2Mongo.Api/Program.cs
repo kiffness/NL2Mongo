@@ -1,34 +1,32 @@
+using MongoDB.Bson;
+using MongoDB.Driver;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// MongoDB
+var connectionString = builder.Configuration.GetConnectionString("MongoDB")!;
+var databaseName = builder.Configuration["MongoDB:DatabaseName"]!;
+
+builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(connectionString));
+builder.Services.AddSingleton<IMongoDatabase>(sp =>
+    sp.GetRequiredService<IMongoClient>().GetDatabase(databaseName));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-
-app.UseHttpsRedirection();
-
-var summaries = new[]
+app.MapGet("/health", async (IMongoDatabase db) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    try
+    {
+        await db.RunCommandAsync((Command<BsonDocument>)"{ping:1}");
+        return Results.Ok(new { status = "ok", database = databaseName });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { status = "fail", error = ex.Message },
+            statusCode: 503);
+    }
 });
 
-app.Run();
+app.MapGet("/contacts", () => Results.StatusCode(501));
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.Run();
