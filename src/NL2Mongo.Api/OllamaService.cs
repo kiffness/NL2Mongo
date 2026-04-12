@@ -1,0 +1,96 @@
+using System.Text.Json.Serialization;
+
+public class OllamaService(HttpClient http)
+{
+    private const string Model = "llama3.1:8b";
+
+    public async Task<Result<string>> GenerateFilterAsync(string description, SchemaDescription schema)
+    {
+        var request = new
+        {
+            model = Model,
+            messages = new[]
+            {
+                new { role = "system", content = BuildSystemPrompt(schema) },
+                new { role = "user",   content = description }
+            },
+            stream = false
+        };
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.PostAsJsonAsync("/api/chat", request);
+        }
+        catch (Exception ex)
+        {
+            return Result<string>.Fail(new Error($"Could not reach Ollama: {ex.Message}", ErrorType.Internal));
+        }
+
+        if (!response.IsSuccessStatusCode)
+            return Result<string>.Fail(new Error($"Ollama returned HTTP {(int)response.StatusCode}", ErrorType.Internal));
+
+        var body = await response.Content.ReadFromJsonAsync<OllamaChatResponse>();
+        var text = body?.Message?.Content?.Trim();
+
+        if (string.IsNullOrEmpty(text))
+            return Result<string>.Fail(new Error("Empty response from Ollama", ErrorType.Internal));
+
+        var json = ExtractJson(text);
+        if (json is null)
+            return Result<string>.Fail(new Error(
+                $"Model did not return a JSON object. Raw response: {text}", ErrorType.Validation));
+
+        return Result<string>.Ok(json);
+    }
+
+    // Pull the first { ... } block out of whatever the model returns.
+    // The model sometimes wraps its answer in prose or markdown fences.
+    private static string? ExtractJson(string text)
+    {
+        var start = text.IndexOf('{');
+        var end   = text.LastIndexOf('}');
+        if (start == -1 || end == -1 || end < start) return null;
+        return text[start..(end + 1)];
+    }
+
+    private static string BuildSystemPrompt(SchemaDescription schema)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("You are a MongoDB query generator. Convert natural language audience descriptions into MongoDB filter documents.");
+        sb.AppendLine();
+        sb.AppendLine("Collection schema:");
+        foreach (var field in schema.Fields)
+        {
+            var line = $"- {field.Name}: {field.Type}";
+            if (field.SampleValues.Count > 0)
+                line += $" — values: {string.Join(", ", field.SampleValues)}";
+            sb.AppendLine(line);
+        }
+        sb.AppendLine();
+        sb.AppendLine("Rules:");
+        sb.AppendLine("- Output ONLY a valid JSON object. No explanation, no markdown, no code blocks.");
+        sb.AppendLine("- Use standard MongoDB operators where needed: $gt, $lt, $gte, $lte, $in, $nin, $and, $or, $regex.");
+        sb.AppendLine("- For array fields use: {\"fieldName\": \"Value\"} for a single value or {\"fieldName\": {\"$in\": [\"A\",\"B\"]}} for multiple.");
+        sb.AppendLine();
+        sb.AppendLine("Examples:");
+        sb.AppendLine("User: active contacts");
+        sb.AppendLine("Assistant: {\"isActive\": true}");
+        sb.AppendLine();
+        sb.AppendLine("User: engineers over 30");
+        sb.AppendLine("Assistant: {\"occupation\": \"Engineer\", \"age\": {\"$gt\": 30}}");
+        sb.AppendLine();
+        sb.AppendLine("User: VIP or Newsletter members who are active");
+        sb.AppendLine("Assistant: {\"groups\": {\"$in\": [\"VIP\", \"Newsletter\"]}, \"isActive\": true}");
+        sb.AppendLine();
+        sb.AppendLine("User: nurses or teachers under 40 in the United Kingdom");
+        sb.AppendLine("Assistant: {\"occupation\": {\"$in\": [\"Nurse\", \"Teacher\"]}, \"age\": {\"$lt\": 40}, \"country\": \"United Kingdom\"}");
+        return sb.ToString();
+    }
+}
+
+record OllamaChatResponse(
+    [property: JsonPropertyName("message")] OllamaMessage? Message);
+
+record OllamaMessage(
+    [property: JsonPropertyName("content")] string Content);

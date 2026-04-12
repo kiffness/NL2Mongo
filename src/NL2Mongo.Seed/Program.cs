@@ -1,5 +1,9 @@
 using Bogus;
+using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Driver;
+
+var pack = new ConventionPack { new CamelCaseElementNameConvention() };
+ConventionRegistry.Register("CamelCase", pack, t => true);
 
 const string connectionString = "mongodb://localhost:27017";
 const string databaseName = "nl2mongo";
