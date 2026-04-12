@@ -21,8 +21,10 @@
       <div class="card-body">
         <div class="row g-2 mb-3">
           <div class="col-md-3">
-            <label class="form-label fw-semibold">Tenant (X-Tenant)</label>
-            <input id="tenant-input" type="text" class="form-control" value="nl2mongo" />
+            <label class="form-label fw-semibold">Tenant</label>
+            <select id="tenant-input" class="form-select">
+              <option value="">Loading tenants…</option>
+            </select>
           </div>
         </div>
         <label class="form-label fw-semibold">Audience description</label>
@@ -44,12 +46,7 @@
           </div>
           <div class="table-responsive">
             <table class="table table-hover align-middle bg-white rounded mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Name</th><th>Email</th><th>Age</th>
-                  <th>Occupation</th><th>Location</th><th>Groups</th><th>Active</th>
-                </tr>
-              </thead>
+              <thead class="table-light"><tr></tr></thead>
               <tbody id="preview-body"></tbody>
             </table>
           </div>
@@ -62,14 +59,9 @@
     <div id="status" class="text-muted small mb-2">Loading…</div>
     <div class="table-responsive">
       <table class="table table-hover align-middle bg-white shadow-sm rounded">
-        <thead class="table-light">
-          <tr>
-            <th>Name</th><th>Email</th><th>Age</th>
-            <th>Occupation</th><th>Location</th><th>Groups</th><th>Active</th>
-          </tr>
-        </thead>
+        <thead class="table-light"><tr id="contacts-head"></tr></thead>
         <tbody id="contacts-body">
-          <tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>
+          <tr><td class="text-center text-muted py-4">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -84,30 +76,50 @@
     let currentPage = 1;
 
     function tenant() {
-      return document.getElementById('tenant-input').value.trim() || 'nl2mongo';
+      return document.getElementById('tenant-input').value;
     }
 
     function headers(extra = {}) {
       return { 'X-Tenant': tenant(), ...extra };
     }
 
+    // ── Tenants ───────────────────────────────────────────────────────────────
+
+    async function loadTenants() {
+      try {
+        const res     = await fetch(`${API}/tenants`);
+        const tenants = await res.json();
+        const select  = document.getElementById('tenant-input');
+        select.innerHTML = tenants.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+        if (tenants.length) loadContacts(1);
+      } catch (err) {
+        document.getElementById('status').textContent = `Could not load tenants: ${err.message}`;
+      }
+    }
+
+    document.getElementById('tenant-input').addEventListener('change', () => {
+      document.getElementById('preview-results').style.display = 'none';
+      loadContacts(1);
+    });
+
     // ── All contacts ──────────────────────────────────────────────────────────
 
     async function loadContacts(page) {
       currentPage = page;
-      const tbody = document.getElementById('contacts-body');
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>';
+      const tbody  = document.getElementById('contacts-body');
+      const colCount = document.getElementById('contacts-head').children.length || 1;
+      tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-muted py-4">Loading…</td></tr>`;
 
       try {
         const res = await fetch(`${API}/contacts?page=${page}&pageSize=${PAGE_SIZE}`, { headers: headers() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        renderRows(tbody, data.items);
+        renderDynamicRows('contacts-head', tbody, data.items);
         renderPagination(data.total, data.page, data.pageSize);
         document.getElementById('status').textContent =
           `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, data.total)} of ${data.total} contacts`;
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Failed to load: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-danger py-4">Failed to load: ${err.message}</td></tr>`;
         document.getElementById('status').textContent = '';
       }
     }
@@ -121,20 +133,18 @@
       const btn = document.getElementById('preview-btn');
       btn.disabled = true;
       btn.textContent = 'Thinking…';
-
       document.getElementById('preview-results').style.display = 'none';
 
       try {
-        const res = await fetch(`${API}/segments/preview`, {
+        const res  = await fetch(`${API}/segments/preview`, {
           method: 'POST',
           headers: headers({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ description })
         });
-
         const data = await res.json();
 
         if (!res.ok) {
-          alert(data.error ?? `Error ${res.status}`);
+          alert(data.error ?? data.detail ?? `Error ${res.status}`);
           return;
         }
 
@@ -142,7 +152,7 @@
           `${data.total} contact${data.total !== 1 ? 's' : ''} matched`;
         document.getElementById('query-display').textContent =
           JSON.stringify(JSON.parse(data.generatedQuery), null, 2);
-        renderRows(document.getElementById('preview-body'), data.contacts);
+        renderDynamicRows('preview-body-head', document.getElementById('preview-body'), data.contacts);
         document.getElementById('preview-results').style.display = 'block';
 
       } catch (err) {
@@ -160,23 +170,30 @@
 
     // ── Shared rendering ──────────────────────────────────────────────────────
 
-    function renderRows(tbody, contacts) {
-      if (!contacts.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No contacts found.</td></tr>';
+    // Renders rows into tbody and updates the thead row (identified by headRowId).
+    // Columns are derived from the keys of the first result — works for any schema.
+    function renderDynamicRows(headRowId, tbody, items) {
+      if (!items || !items.length) {
+        tbody.innerHTML = '<tr><td class="text-center text-muted py-4">No contacts found.</td></tr>';
         return;
       }
-      tbody.innerHTML = contacts.map(c => `
-        <tr>
-          <td>${esc(c.firstName)} ${esc(c.lastName)}</td>
-          <td class="text-muted">${esc(c.email)}</td>
-          <td>${c.age}</td>
-          <td>${esc(c.occupation)}</td>
-          <td>${esc(c.city)}, ${esc(c.country)}</td>
-          <td>${(c.groups ?? []).map(g => `<span class="badge bg-secondary badge-group me-1">${esc(g)}</span>`).join('')}</td>
-          <td>${c.isActive
-            ? '<span class="badge bg-success">Yes</span>'
-            : '<span class="badge bg-light text-secondary border">No</span>'}</td>
-        </tr>`).join('');
+      const keys     = Object.keys(items[0]);
+      const headRow  = document.getElementById(headRowId) ?? tbody.closest('table').querySelector('thead tr');
+      if (headRow) headRow.innerHTML = keys.map(k => `<th>${esc(k)}</th>`).join('');
+      tbody.innerHTML = items.map(c =>
+        `<tr>${keys.map(k => `<td>${renderValue(c[k])}</td>`).join('')}</tr>`
+      ).join('');
+    }
+
+    function renderValue(v) {
+      if (v === null || v === undefined) return '<span class="text-muted">—</span>';
+      if (typeof v === 'boolean') return v
+        ? '<span class="badge bg-success">Yes</span>'
+        : '<span class="badge bg-light text-secondary border">No</span>';
+      if (Array.isArray(v)) return v.map(i =>
+        `<span class="badge bg-secondary me-1">${esc(String(i))}</span>`).join('') || '<span class="text-muted">—</span>';
+      if (typeof v === 'object') return `<span class="text-muted small">${esc(JSON.stringify(v))}</span>`;
+      return esc(String(v));
     }
 
     function renderPagination(total, page, pageSize) {
@@ -225,7 +242,7 @@
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    loadContacts(1);
+    loadTenants();
   </script>
 </body>
 </html>
