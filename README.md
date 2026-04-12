@@ -78,6 +78,19 @@ Verify it's working:
 docker exec -it ollama ollama run llama3.1:8b "say hello"
 ```
 
+> **No GPU?** `llama3.1:8b` runs on CPU but is slow (~30–60s per query). Consider a smaller model instead:
+>
+> | Model | Command | Notes |
+> |-------|---------|-------|
+> | `llama3.2:3b` | `ollama pull llama3.2:3b` | Best CPU option — good structured output, much faster |
+> | `phi3:mini` | `ollama pull phi3:mini` | Microsoft 3.8B model, strong at JSON tasks on CPU |
+>
+> If you switch models, update the `Model` constant in `src/NL2Mongo.Api/OllamaService.cs`:
+> ```csharp
+> private const string Model = "llama3.2:3b";
+> ```
+> Accuracy may vary — rerun `POST /segments/evaluate` after switching to get a new baseline.
+
 ### 3. Seed the database
 
 ```bash
