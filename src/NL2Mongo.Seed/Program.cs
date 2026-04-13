@@ -33,8 +33,8 @@ var nl2mongoFaker = new Faker<Contact>()
     .RuleFor(c => c.IsActive,   f => f.Random.Bool(0.75f))
     .RuleFor(c => c.CreatedAt,  f => f.Date.Past(3).ToUniversalTime());
 
-await nl2mongoContacts.InsertManyAsync(nl2mongoFaker.Generate(500));
-Console.WriteLine("Inserted 500 contacts into nl2mongo.contacts.");
+await nl2mongoContacts.InsertManyAsync(nl2mongoFaker.Generate(1000));
+Console.WriteLine("Inserted 1000 contacts into nl2mongo.contacts.");
 
 // ── Tenant 2: dunmowPropertyGroup ─────────────────────────────────────────────
 
@@ -63,8 +63,8 @@ var dunmowFaker = new Faker<Lead>()
     .RuleFor(l => l.Source,           f => f.PickRandom(sources))
     .RuleFor(l => l.CreatedAt,        f => f.Date.Past(2).ToUniversalTime());
 
-await dunmowContacts.InsertManyAsync(dunmowFaker.Generate(300));
-Console.WriteLine("Inserted 300 contacts into dunmowPropertyGroup.contacts.");
+await dunmowContacts.InsertManyAsync(dunmowFaker.Generate(1000));
+Console.WriteLine("Inserted 1000 contacts into dunmowPropertyGroup.contacts.");
 
 // ── Records ───────────────────────────────────────────────────────────────────
 

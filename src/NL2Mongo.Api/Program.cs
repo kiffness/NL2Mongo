@@ -1,6 +1,9 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Driver;
+using NL2Mongo.Api.Helpers;
+using NL2Mongo.Api.Records;
+using NL2Mongo.Api.Services;
 
 var pack = new ConventionPack { new CamelCaseElementNameConvention() };
 ConventionRegistry.Register("CamelCase", pack, t => true);
@@ -117,6 +120,8 @@ app.MapPost("/segments/preview", async (
     var headerError = TryGetTenantDb(request, client, out var db);
     if (headerError is not null) return headerError;
 
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+
     var collectionName = await ResolveCollectionNameAsync(db!);
     var schema         = await inspector.InspectAsync(db!, collectionName);
 
@@ -135,11 +140,112 @@ app.MapPost("/segments/preview", async (
         .Limit(200)
         .ToListAsync();
 
+    sw.Stop();
+
     var items = matchedDocs
         .Select(d => System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(d.ToJson(jsonSettings)))
         .ToList();
 
-    return Result<SegmentPreview>.Ok(new SegmentPreview(items, items.Count, cleanQuery))
+    return Result<SegmentPreview>.Ok(new SegmentPreview(items, items.Count, cleanQuery, sw.ElapsedMilliseconds))
+        .ToApiResult();
+});
+
+app.MapPost("/segments", async (
+    SegmentSaveRequest req,
+    HttpRequest request,
+    IMongoClient client) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Result<SavedSegment>.Fail(new Error("Name is required", ErrorType.Validation)).ToApiResult();
+    if (string.IsNullOrWhiteSpace(req.Query))
+        return Result<SavedSegment>.Fail(new Error("Query is required", ErrorType.Validation)).ToApiResult();
+
+    var headerError = TryGetTenantDb(request, client, out var db);
+    if (headerError is not null) return headerError;
+
+    var segments = db!.GetCollection<BsonDocument>("segments");
+    var doc = new BsonDocument
+    {
+        ["name"]        = req.Name,
+        ["description"] = req.Description ?? "",
+        ["query"]       = req.Query,
+        ["matchCount"]  = req.MatchCount,
+        ["createdAt"]   = DateTime.UtcNow
+    };
+    await segments.InsertOneAsync(doc);
+
+    var saved = new SavedSegment(
+        doc["_id"].AsObjectId.ToString(),
+        doc["name"].AsString,
+        doc["description"].AsString,
+        doc["query"].AsString,
+        doc["matchCount"].AsInt32,
+        doc["createdAt"].ToUniversalTime());
+
+    return Result<SavedSegment>.Ok(saved).ToApiResult();
+});
+
+app.MapGet("/segments", async (HttpRequest request, IMongoClient client) =>
+{
+    var headerError = TryGetTenantDb(request, client, out var db);
+    if (headerError is not null) return headerError;
+
+    var segments = db!.GetCollection<BsonDocument>("segments");
+    var docs = await segments
+        .Find(FilterDefinition<BsonDocument>.Empty)
+        .Sort(Builders<BsonDocument>.Sort.Descending("createdAt"))
+        .ToListAsync();
+
+    var results = docs.Select(d => new SavedSegment(
+        d["_id"].AsObjectId.ToString(),
+        d["name"].AsString,
+        d["description"].AsString,
+        d["query"].AsString,
+        d["matchCount"].AsInt32,
+        d["createdAt"].ToUniversalTime()))
+        .ToList();
+
+    return Result<IReadOnlyList<SavedSegment>>.Ok(results).ToApiResult();
+});
+
+app.MapPost("/segments/{id}/run", async (
+    string id,
+    HttpRequest request,
+    IMongoClient client) =>
+{
+    var headerError = TryGetTenantDb(request, client, out var db);
+    if (headerError is not null) return headerError;
+
+    if (!MongoDB.Bson.ObjectId.TryParse(id, out var objectId))
+        return Result<SegmentRunResult>.Fail(new Error("Invalid segment id", ErrorType.Validation)).ToApiResult();
+
+    var segments = db!.GetCollection<BsonDocument>("segments");
+    var segDoc   = await segments.Find(Builders<BsonDocument>.Filter.Eq("_id", objectId)).FirstOrDefaultAsync();
+    if (segDoc is null)
+        return Result<SegmentRunResult>.Fail(new Error("Segment not found", ErrorType.NotFound)).ToApiResult();
+
+    var validationResult = QueryValidator.Validate(segDoc["query"].AsString);
+    if (!validationResult.IsSuccess)
+        return validationResult.ToApiResult();
+
+    var collectionName = await ResolveCollectionNameAsync(db!);
+    var contacts       = db!.GetCollection<BsonDocument>(collectionName);
+    var matchedDocs    = await contacts
+        .Find(validationResult.Value!)
+        .Project(Builders<BsonDocument>.Projection.Exclude("_id"))
+        .Limit(200)
+        .ToListAsync();
+
+    var items = matchedDocs
+        .Select(d => System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(d.ToJson(jsonSettings)))
+        .ToList();
+
+    return Result<SegmentRunResult>.Ok(new SegmentRunResult(
+        id,
+        segDoc["name"].AsString,
+        items,
+        items.Count,
+        segDoc["query"].AsString))
         .ToApiResult();
 });
 

@@ -15,20 +15,6 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
-  nl2mongo-api:
-    build: .
-    ports:
-      - "5100:5100"
-    environment:
-      - ASPNETCORE_URLS=http://+:5100
-      - ConnectionStrings__MongoDB=mongodb://mongo:27017
-      - OllamaBaseUrl=${OllamaBaseUrl:-http://host.docker.internal:11434}
-      - OllamaModel=${OllamaModel:-llama3.1:8b}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - mongo
-
 volumes:
   mongo_data:
   ollama_data:

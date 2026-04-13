@@ -1,248 +1,967 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NL2Mongo — Contact Segments</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <title>Nexus — Estate Agent CRM Hub</title>
+
+  <!-- Fonts: Bebas Neue (logo) + IBM Plex Sans (UI) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand:   { DEFAULT: '#fc5404', dim: '#c24203', faint: 'rgba(252,84,4,0.08)', ring: 'rgba(252,84,4,0.25)' },
+            ink:     { DEFAULT: '#0b0a09', 2: '#111009', 3: '#181510', 4: '#1f1c16', 5: '#27231c' },
+            stone:   { DEFAULT: '#f0ebe3', dim: '#9a9085', muted: '#585048', wire: '#2e2920', wire2: '#3d3830' },
+          },
+          fontFamily: {
+            display: ['"Bebas Neue"', 'sans-serif'],
+            ui:      ['"IBM Plex Sans"', 'sans-serif'],
+            mono:    ['"IBM Plex Mono"', 'monospace'],
+          },
+        }
+      }
+    }
+  </script>
+
   <style>
-    body { background: #f8f9fa; }
-    .badge-group { font-size: 0.75rem; }
-    #query-display { font-size: 0.85rem; word-break: break-all; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: #0b0a09;
+      color: #f0ebe3;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 3px; height: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2e2920; border-radius: 2px; }
+
+    /* ── Background texture: tiny dot grid ── */
+    .dot-grid {
+      background-image: radial-gradient(circle, rgba(252,84,4,0.12) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 228px;
+      flex-shrink: 0;
+      background: #0e0d0b;
+      border-right: 1px solid #2e2920;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Vertical orange rule left of sidebar brand */
+    #sidebar::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, transparent 0%, #fc5404 30%, #fc5404 70%, transparent 100%);
+    }
+
+    /* ── Nav items ── */
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: #585048;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      transition: color 0.15s, background 0.15s;
+      letter-spacing: 0.01em;
+    }
+    .nav-item:hover { color: #f0ebe3; background: rgba(255,255,255,0.04); }
+    .nav-item.active {
+      color: #fc5404;
+      background: rgba(252,84,4,0.1);
+    }
+    .nav-item svg { flex-shrink: 0; }
+
+    /* ── Top bar ── */
+    #topbar {
+      border-bottom: 1px solid #2e2920;
+      background: #0e0d0b;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    /* ── Cards ── */
+    .panel {
+      background: #181510;
+      border: 1px solid #2e2920;
+      border-radius: 10px;
+      transition: border-color 0.2s;
+    }
+    .panel:hover { border-color: #3d3830; }
+
+    .segment-card {
+      background: #181510;
+      border: 1px solid #2e2920;
+      border-radius: 10px;
+      transition: all 0.2s ease;
+    }
+    .segment-card:hover {
+      border-color: rgba(252,84,4,0.45);
+      box-shadow: 0 0 0 1px rgba(252,84,4,0.08), 0 4px 24px rgba(0,0,0,0.4);
+      transform: translateY(-1px);
+    }
+
+    /* ── AI textarea ── */
+    #description-input {
+      background: #111009;
+      border: 1px solid #2e2920;
+      border-radius: 8px;
+      color: #f0ebe3;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      padding: 12px 16px;
+      resize: none;
+      width: 100%;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #description-input::placeholder { color: #585048; }
+    #description-input:focus {
+      outline: none;
+      border-color: #fc5404;
+      box-shadow: 0 0 0 3px rgba(252,84,4,0.1);
+    }
+
+    /* ── Inputs (generic) ── */
+    .field {
+      background: #111009;
+      border: 1px solid #2e2920;
+      border-radius: 6px;
+      color: #f0ebe3;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.8125rem;
+      padding: 7px 12px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field:focus { outline: none; border-color: #fc5404; box-shadow: 0 0 0 3px rgba(252,84,4,0.1); }
+    .field::placeholder { color: #585048; }
+    select.field { cursor: pointer; }
+
+    /* ── Buttons ── */
+    .btn-brand {
+      background: #fc5404;
+      color: #fff;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border: none;
+      border-radius: 7px;
+      padding: 9px 20px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn-brand:hover { background: #e44c03; box-shadow: 0 0 20px rgba(252,84,4,0.35); }
+    .btn-brand:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+    .btn-ghost {
+      background: none;
+      border: 1px solid #2e2920;
+      color: #585048;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-ghost:hover { border-color: #3d3830; color: #f0ebe3; background: rgba(255,255,255,0.03); }
+
+    .btn-run {
+      background: none;
+      border: 1px solid #2e2920;
+      color: #585048;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 500;
+      border-radius: 5px;
+      padding: 5px 12px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-run:hover { border-color: #fc5404; color: #fc5404; background: rgba(252,84,4,0.07); }
+    .btn-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Table ── */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table thead th {
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #585048;
+      border-bottom: 1px solid #2e2920;
+      padding: 10px 16px;
+      white-space: nowrap;
+      text-align: left;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .data-table tbody tr {
+      border-bottom: 1px solid #1f1c16;
+      transition: background 0.12s;
+    }
+    .data-table tbody tr:last-child { border-bottom: none; }
+    .data-table tbody tr:hover { background: rgba(252,84,4,0.04); }
+    .data-table tbody td {
+      padding: 11px 16px;
+      font-size: 0.8125rem;
+      color: #9a9085;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .data-table tbody td:first-child { color: #f0ebe3; font-weight: 500; }
+
+    /* ── Tags ── */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .tag-vip      { background: rgba(252,84,4,0.15); color: #fc5404; border: 1px solid rgba(252,84,4,0.2); }
+    .tag-active   { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+    .tag-inactive { background: rgba(255,255,255,0.04); color: #585048; border: 1px solid #2e2920; }
+    .tag-group    { background: rgba(255,255,255,0.05); color: #9a9085; border: 1px solid #2e2920; }
+    .tag-blue     { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+
+    /* ── Query code ── */
+    .query-code {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: #fc8c5a;
+      background: #111009;
+      border: 1px solid #2e2920;
+      border-radius: 7px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* ── Dividers ── */
+    .section-divider {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #2e2920 20%, #2e2920 80%, transparent);
+    }
+
+    /* ── Pulse dot ── */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+    .pulse { animation: pulse 2.4s ease-in-out infinite; }
+
+    /* ── Spin ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.7s linear infinite; }
+
+    /* ── Page entry ── */
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .rise   { animation: rise 0.35s ease both; }
+    .rise-1 { animation: rise 0.35s 0.08s ease both; }
+    .rise-2 { animation: rise 0.35s 0.16s ease both; }
+    .rise-3 { animation: rise 0.35s 0.24s ease both; }
+
+    /* ── Scrollable content ── */
+    .scroll-area { overflow-y: auto; flex: 1; min-height: 0; padding: 24px 28px 40px; }
+
+    /* ── Empty state ── */
+    .empty-dashed {
+      border: 1px dashed #2e2920;
+      border-radius: 10px;
+      padding: 48px 24px;
+      text-align: center;
+      color: #585048;
+      font-size: 0.8125rem;
+    }
+
+    /* ── Stat pill ── */
+    .stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(252,84,4,0.1);
+      border: 1px solid rgba(252,84,4,0.2);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #fc5404;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* ── Elapsed badge ── */
+    .elapsed-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #1f1c16;
+      border: 1px solid #2e2920;
+      border-radius: 20px;
+      padding: 2px 9px;
+      font-size: 0.7rem;
+      color: #585048;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* ── Save bar ── */
+    .save-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(252,84,4,0.05);
+      border-top: 1px solid rgba(252,84,4,0.15);
+      padding: 12px 20px;
+    }
+    .save-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #f0ebe3;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.8125rem;
+      outline: none;
+    }
+    .save-bar input::placeholder { color: #585048; }
+
+    /* ── Pagination ── */
+    .page-btn {
+      height: 30px;
+      min-width: 30px;
+      padding: 0 8px;
+      border-radius: 5px;
+      border: 1px solid #2e2920;
+      background: none;
+      color: #585048;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .page-btn:hover:not(:disabled) { border-color: #3d3830; color: #f0ebe3; }
+    .page-btn.active { background: #fc5404; border-color: #fc5404; color: #fff; }
+    .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
   </style>
 </head>
 <body>
-  <div class="container py-4">
-    <h1 class="mb-1">Contact Segments</h1>
-    <p class="text-muted mb-4">Describe an audience in plain English to preview a segment, or browse all contacts below.</p>
+<div style="display:flex; height:100vh; overflow:hidden;">
 
-    <!-- Tenant + Segment Preview -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-body">
-        <div class="row g-2 mb-3">
-          <div class="col-md-3">
-            <label class="form-label fw-semibold">Tenant</label>
-            <select id="tenant-input" class="form-select">
-              <option value="">Loading tenants…</option>
-            </select>
-          </div>
-        </div>
-        <label class="form-label fw-semibold">Audience description</label>
-        <div class="input-group">
-          <textarea id="description-input" class="form-control" rows="2"
-            placeholder="e.g. active engineers over 40 in the VIP group"></textarea>
-          <button id="preview-btn" class="btn btn-primary px-4" type="button">Preview</button>
-        </div>
+  <!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+  <aside id="sidebar">
 
-        <!-- Results panel (hidden until a preview runs) -->
-        <div id="preview-results" class="mt-3" style="display:none">
-          <div class="d-flex align-items-center justify-content-between mb-2">
-            <span id="preview-count" class="fw-semibold"></span>
-            <button id="clear-btn" class="btn btn-sm btn-outline-secondary">Clear preview</button>
-          </div>
-          <div class="mb-2">
-            <span class="text-muted small">Generated query:</span>
-            <pre id="query-display" class="bg-light border rounded p-2 mt-1 mb-0"></pre>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-hover align-middle bg-white rounded mb-0">
-              <thead class="table-light"><tr></tr></thead>
-              <tbody id="preview-body"></tbody>
-            </table>
-          </div>
+    <!-- Logo -->
+    <div style="padding:20px 18px 18px; border-bottom:1px solid #2e2920;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <!-- House icon in brand orange -->
+        <div style="width:32px;height:32px;background:#fc5404;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 16px rgba(252,84,4,0.4);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+            <path d="M3 12L5 10M5 10L12 3L19 10M5 10V20C5 20.5523 5.44772 21 6 21H9M19 10L21 12M19 10V20C19 20.5523 18.5523 21 18 21H15M9 21C9 21 9 15 12 15C15 15 15 21 15 21M9 21H15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.08em;line-height:1;color:#f0ebe3;">NEXUS</div>
+          <div style="font-size:0.55rem;letter-spacing:0.2em;color:#585048;margin-top:2px;font-weight:600;text-transform:uppercase;">Estate CRM Hub</div>
         </div>
       </div>
     </div>
 
-    <!-- All contacts -->
-    <h5 class="mb-2">All contacts</h5>
-    <div id="status" class="text-muted small mb-2">Loading…</div>
-    <div class="table-responsive">
-      <table class="table table-hover align-middle bg-white shadow-sm rounded">
-        <thead class="table-light"><tr id="contacts-head"></tr></thead>
-        <tbody id="contacts-body">
-          <tr><td class="text-center text-muted py-4">Loading…</td></tr>
-        </tbody>
-      </table>
+    <!-- CRM Selector -->
+    <div style="padding:14px 14px 0;">
+      <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:#585048;font-weight:600;margin-bottom:7px;padding-left:2px;">Active CRM</div>
+      <select id="tenant-input" class="field" style="width:100%;">
+        <option value="">Loading…</option>
+      </select>
     </div>
-    <nav aria-label="Contacts pagination">
-      <ul class="pagination justify-content-center" id="pagination"></ul>
+
+    <!-- Nav -->
+    <nav style="padding:16px 14px;flex:1;">
+      <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:#585048;font-weight:600;margin-bottom:8px;padding-left:2px;">Navigation</div>
+      <button class="nav-item active" id="nav-segments" onclick="showSection('segments')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+        </svg>
+        Segments
+      </button>
+      <button class="nav-item" id="nav-contacts" onclick="showSection('contacts')" style="margin-top:2px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+        Contacts
+      </button>
     </nav>
-  </div>
 
-  <script>
-    const API = 'http://localhost:5000';
-    const PAGE_SIZE = 20;
-    let currentPage = 1;
+    <!-- Status footer -->
+    <div style="padding:14px 16px;border-top:1px solid #2e2920;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#fc5404;display:inline-block;" class="pulse"></span>
+        <span style="font-size:0.73rem;color:#585048;">AI engine online</span>
+      </div>
+      <div id="health-pill" style="font-size:0.7rem;color:#585048;display:flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;">
+        <span>●</span><span>Connecting…</span>
+      </div>
+    </div>
+  </aside>
 
-    function tenant() {
-      return document.getElementById('tenant-input').value;
-    }
+  <!-- ═══════════════════════════════ MAIN ════════════════════════════════ -->
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;">
 
-    function headers(extra = {}) {
-      return { 'X-Tenant': tenant(), ...extra };
-    }
+    <!-- Top bar -->
+    <div id="topbar">
+      <div>
+        <h1 id="page-title" style="font-size:1rem;font-weight:600;color:#f0ebe3;letter-spacing:-0.01em;">Segments</h1>
+        <p id="page-sub" style="font-size:0.73rem;color:#9a9085;margin-top:2px;">Describe an audience in plain English — AI translates it into a contact filter</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="crm-label" style="font-size:0.73rem;color:#585048;font-family:'IBM Plex Mono',monospace;"></div>
+      </div>
+    </div>
 
-    // ── Tenants ───────────────────────────────────────────────────────────────
+    <!-- Scrollable body -->
+    <div class="scroll-area dot-grid" id="main-scroll">
 
-    async function loadTenants() {
-      try {
-        const res     = await fetch(`${API}/tenants`);
-        const tenants = await res.json();
-        const select  = document.getElementById('tenant-input');
-        select.innerHTML = tenants.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-        if (tenants.length) loadContacts(1);
-      } catch (err) {
-        document.getElementById('status').textContent = `Could not load tenants: ${err.message}`;
-      }
-    }
+      <!-- ══════════ SEGMENTS SECTION ══════════ -->
+      <div id="section-segments">
 
-    document.getElementById('tenant-input').addEventListener('change', () => {
-      document.getElementById('preview-results').style.display = 'none';
-      loadContacts(1);
+        <!-- AI Builder -->
+        <div class="panel rise" style="padding:22px;margin-bottom:20px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
+            <div style="width:34px;height:34px;border-radius:8px;background:rgba(252,84,4,0.1);border:1px solid rgba(252,84,4,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fc5404" stroke-width="1.8" stroke-linecap="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+            </div>
+            <div>
+              <div style="font-size:0.875rem;font-weight:600;color:#f0ebe3;">AI Audience Builder</div>
+              <div style="font-size:0.73rem;color:#9a9085;margin-top:2px;">Powered by Llama 3.1 · Fully on-premise · Zero data egress</div>
+            </div>
+          </div>
+
+          <textarea id="description-input" rows="3"
+            placeholder="e.g. Active landlords over 45 in the VIP group who haven't engaged in 90 days…"></textarea>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:12px;">
+            <button id="preview-btn" class="btn-brand">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run Preview
+            </button>
+          </div>
+        </div>
+
+        <!-- Preview Results -->
+        <div id="preview-results" class="panel rise-1" style="display:none;margin-bottom:20px;overflow:hidden;">
+          <!-- Header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #2e2920;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="stat-pill" id="preview-count">0 matched</span>
+              <span class="elapsed-badge" id="preview-elapsed" style="display:none;">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <span id="elapsed-text"></span>
+              </span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="btn-ghost" id="toggle-query-btn">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                View query
+              </button>
+              <button class="btn-ghost" id="clear-btn">Dismiss</button>
+            </div>
+          </div>
+
+          <!-- Query panel (collapsed by default) -->
+          <div id="query-panel" style="display:none;padding:16px 20px;border-bottom:1px solid #2e2920;">
+            <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:#585048;font-weight:600;margin-bottom:8px;font-family:'IBM Plex Mono',monospace;">Generated MongoDB Filter</div>
+            <pre id="query-display" class="query-code"></pre>
+          </div>
+
+          <!-- Save bar -->
+          <div class="save-bar">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fc5404" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+            </svg>
+            <input id="segment-name-input" type="text" placeholder="Name this segment to save it…" />
+            <span id="save-status" style="font-size:0.73rem;color:#585048;white-space:nowrap;font-family:'IBM Plex Mono',monospace;"></span>
+            <button id="save-segment-btn" class="btn-brand" style="padding:6px 14px;font-size:0.75rem;border-radius:5px;">Save</button>
+          </div>
+
+          <!-- Table -->
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead><tr id="preview-head"></tr></thead>
+              <tbody id="preview-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Saved Segments -->
+        <div class="rise-2" style="margin-bottom:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <div style="font-size:0.875rem;font-weight:600;color:#f0ebe3;">Saved Segments</div>
+              <div style="font-size:0.73rem;color:#9a9085;margin-top:2px;">Reusable audience filters — re-run anytime against live data</div>
+            </div>
+            <button class="btn-ghost" onclick="loadSegments()">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div id="segments-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+            <div style="font-size:0.8rem;color:#585048;padding:8px 0;">Loading segments…</div>
+          </div>
+        </div>
+
+        <!-- Segment run result -->
+        <div id="segment-run-results" class="panel" style="display:none;overflow:hidden;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #2e2920;">
+            <div>
+              <div id="run-segment-title" style="font-size:0.875rem;font-weight:600;color:#f0ebe3;"></div>
+              <div style="font-size:0.73rem;color:#9a9085;margin-top:2px;">Live results from stored query</div>
+            </div>
+            <button class="btn-ghost" id="close-run-btn">Close</button>
+          </div>
+          <div style="padding:14px 20px;border-bottom:1px solid #2e2920;">
+            <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:#585048;font-weight:600;margin-bottom:8px;font-family:'IBM Plex Mono',monospace;">Query</div>
+            <pre id="run-query-display" class="query-code"></pre>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead><tr id="run-head"></tr></thead>
+              <tbody id="run-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /section-segments -->
+
+      <!-- ══════════ CONTACTS SECTION ══════════ -->
+      <div id="section-contacts" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;" class="rise">
+          <div>
+            <div style="font-size:0.875rem;font-weight:600;color:#f0ebe3;">All Contacts</div>
+            <div id="contacts-status" style="font-size:0.73rem;color:#9a9085;margin-top:2px;">Loading…</div>
+          </div>
+        </div>
+        <div class="panel rise-1" style="overflow:hidden;margin-bottom:16px;">
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead><tr id="contacts-head"></tr></thead>
+              <tbody id="contacts-body">
+                <tr><td style="text-align:center;color:#585048;padding:48px;font-size:0.8rem;" colspan="99">Loading contacts…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div id="pagination" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;" class="rise-2"></div>
+      </div>
+
+    </div><!-- /scroll-area -->
+  </div><!-- /main -->
+</div><!-- /flex -->
+
+<script>
+  const API      = 'http://localhost:5000';
+  const PAGE_SIZE = 20;
+  let currentPage = 1;
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function tenant()          { return document.getElementById('tenant-input').value; }
+  function headers(extra={}) { return { 'X-Tenant': tenant(), ...extra }; }
+
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function formatElapsed(ms) {
+    if (ms == null) return '';
+    return ms < 1000 ? `${ms}ms` : `${(ms/1000).toFixed(1)}s`;
+  }
+
+  function formatDate(iso) {
+    return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+  }
+
+  // ── Section switching ──────────────────────────────────────────────────────
+
+  function showSection(name) {
+    ['segments','contacts'].forEach(s => {
+      document.getElementById(`section-${s}`).style.display = s === name ? 'block' : 'none';
+      const btn = document.getElementById(`nav-${s}`);
+      btn.classList.toggle('active', s === name);
     });
 
-    // ── All contacts ──────────────────────────────────────────────────────────
+    const meta = {
+      segments: ['Segments', 'Describe an audience in plain English — AI translates it into a contact filter'],
+      contacts: ['Contacts', 'Browse and search all contacts across the active CRM'],
+    };
+    document.getElementById('page-title').textContent = meta[name][0];
+    document.getElementById('page-sub').textContent   = meta[name][1];
+    document.getElementById('main-scroll').scrollTop  = 0;
 
-    async function loadContacts(page) {
-      currentPage = page;
-      const tbody  = document.getElementById('contacts-body');
-      const colCount = document.getElementById('contacts-head').children.length || 1;
-      tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-muted py-4">Loading…</td></tr>`;
+    if (name === 'contacts') loadContacts(1);
+  }
 
-      try {
-        const res = await fetch(`${API}/contacts?page=${page}&pageSize=${PAGE_SIZE}`, { headers: headers() });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        renderDynamicRows('contacts-head', tbody, data.items);
-        renderPagination(data.total, data.page, data.pageSize);
-        document.getElementById('status').textContent =
-          `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, data.total)} of ${data.total} contacts`;
-      } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-danger py-4">Failed to load: ${err.message}</td></tr>`;
-        document.getElementById('status').textContent = '';
+  // ── Health ─────────────────────────────────────────────────────────────────
+
+  async function checkHealth() {
+    const pill = document.getElementById('health-pill');
+    try {
+      const res = await fetch(`${API}/health`, { headers: headers() });
+      if (res.ok) {
+        pill.innerHTML = '<span style="color:#4ade80;">●</span><span style="color:#4ade80;">Connected</span>';
+      } else {
+        pill.innerHTML = '<span style="color:#f87171;">●</span><span style="color:#585048;">Offline</span>';
       }
+    } catch {
+      pill.innerHTML = '<span style="color:#585048;">●</span><span>Unreachable</span>';
     }
+  }
 
-    // ── Segment preview ───────────────────────────────────────────────────────
+  // ── Tenants ────────────────────────────────────────────────────────────────
 
-    document.getElementById('preview-btn').addEventListener('click', async () => {
-      const description = document.getElementById('description-input').value.trim();
-      if (!description) return;
+  async function loadTenants() {
+    try {
+      const res     = await fetch(`${API}/tenants`);
+      const tenants = await res.json();
+      const sel     = document.getElementById('tenant-input');
+      sel.innerHTML = tenants.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+      updateCrmLabel();
+      if (tenants.length) { checkHealth(); loadSegments(); }
+    } catch (e) {
+      document.getElementById('contacts-status').textContent = `Cannot reach API: ${e.message}`;
+    }
+  }
 
-      const btn = document.getElementById('preview-btn');
-      btn.disabled = true;
-      btn.textContent = 'Thinking…';
-      document.getElementById('preview-results').style.display = 'none';
+  function updateCrmLabel() {
+    const t = tenant();
+    document.getElementById('crm-label').textContent = t ? `CRM: ${t}` : '';
+  }
 
-      try {
-        const res  = await fetch(`${API}/segments/preview`, {
-          method: 'POST',
-          headers: headers({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ description })
-        });
-        const data = await res.json();
+  document.getElementById('tenant-input').addEventListener('change', () => {
+    updateCrmLabel();
+    document.getElementById('preview-results').style.display       = 'none';
+    document.getElementById('segment-run-results').style.display   = 'none';
+    checkHealth();
+    loadSegments();
+    const contacts = document.getElementById('section-contacts');
+    if (contacts.style.display !== 'none') loadContacts(1);
+  });
 
-        if (!res.ok) {
-          alert(data.error ?? data.detail ?? `Error ${res.status}`);
-          return;
-        }
+  // ── Preview ────────────────────────────────────────────────────────────────
 
-        document.getElementById('preview-count').textContent =
-          `${data.total} contact${data.total !== 1 ? 's' : ''} matched`;
-        document.getElementById('query-display').textContent =
-          JSON.stringify(JSON.parse(data.generatedQuery), null, 2);
-        renderDynamicRows('preview-body-head', document.getElementById('preview-body'), data.contacts);
-        document.getElementById('preview-results').style.display = 'block';
+  document.getElementById('preview-btn').addEventListener('click', async () => {
+    const desc = document.getElementById('description-input').value.trim();
+    if (!desc) return;
 
-      } catch (err) {
-        alert(`Request failed: ${err.message}`);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Preview';
-      }
-    });
+    const btn = document.getElementById('preview-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Thinking…`;
+    document.getElementById('preview-results').style.display = 'none';
 
-    document.getElementById('clear-btn').addEventListener('click', () => {
-      document.getElementById('preview-results').style.display = 'none';
-      document.getElementById('description-input').value = '';
-    });
+    try {
+      const res  = await fetch(`${API}/segments/preview`, {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ description: desc }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error ?? `Error ${res.status}`); return; }
 
-    // ── Shared rendering ──────────────────────────────────────────────────────
+      document.getElementById('preview-count').textContent = `${data.total} contact${data.total !== 1 ? 's' : ''} matched`;
+      const elapsed = document.getElementById('preview-elapsed');
+      const elText  = document.getElementById('elapsed-text');
+      elText.textContent = formatElapsed(data.elapsedMs);
+      elapsed.style.display = data.elapsedMs != null ? 'inline-flex' : 'none';
 
-    // Renders rows into tbody and updates the thead row (identified by headRowId).
-    // Columns are derived from the keys of the first result — works for any schema.
-    function renderDynamicRows(headRowId, tbody, items) {
-      if (!items || !items.length) {
-        tbody.innerHTML = '<tr><td class="text-center text-muted py-4">No contacts found.</td></tr>';
+      document.getElementById('query-display').textContent = JSON.stringify(JSON.parse(data.generatedQuery), null, 2);
+
+      renderTable('preview-head', document.getElementById('preview-body'), data.contacts);
+      document.getElementById('preview-results').style.display = 'block';
+
+    } catch (e) {
+      alert(`Request failed: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Preview`;
+    }
+  });
+
+  document.getElementById('toggle-query-btn').addEventListener('click', () => {
+    const panel = document.getElementById('query-panel');
+    const btn   = document.getElementById('toggle-query-btn');
+    const open  = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    btn.innerHTML = open
+      ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> View query`
+      : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Hide query`;
+  });
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    document.getElementById('preview-results').style.display = 'none';
+    document.getElementById('description-input').value       = '';
+    document.getElementById('segment-name-input').value      = '';
+    document.getElementById('save-status').textContent       = '';
+    document.getElementById('query-panel').style.display     = 'none';
+    document.getElementById('toggle-query-btn').innerHTML    = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> View query`;
+  });
+
+  // ── Save segment ───────────────────────────────────────────────────────────
+
+  document.getElementById('save-segment-btn').addEventListener('click', async () => {
+    const name = document.getElementById('segment-name-input').value.trim();
+    if (!name) { document.getElementById('save-status').textContent = 'Enter a name first'; return; }
+
+    const query      = document.getElementById('query-display').textContent;
+    const desc       = document.getElementById('description-input').value.trim();
+    const countText  = document.getElementById('preview-count').textContent;
+    const matchCount = parseInt(countText) || 0;
+
+    const btn = document.getElementById('save-segment-btn');
+    btn.disabled = true;
+    document.getElementById('save-status').textContent = 'Saving…';
+
+    try {
+      const res  = await fetch(`${API}/segments`, {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ name, description: desc, query, matchCount }),
+      });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('save-status').textContent = data.error ?? `Error ${res.status}`; return; }
+      document.getElementById('save-status').textContent      = '✓ Saved';
+      document.getElementById('segment-name-input').value     = '';
+      loadSegments();
+    } catch (e) {
+      document.getElementById('save-status').textContent = `Failed: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ── Saved segments ─────────────────────────────────────────────────────────
+
+  async function loadSegments() {
+    const grid = document.getElementById('segments-grid');
+    grid.innerHTML = '<div style="font-size:0.8rem;color:#585048;padding:8px 0;">Loading…</div>';
+    try {
+      const res  = await fetch(`${API}/segments`, { headers: headers() });
+      const data = await res.json();
+      if (!res.ok || !data.length) {
+        grid.innerHTML = `<div class="empty-dashed" style="grid-column:1/-1;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#585048" stroke-width="1.5" style="margin:0 auto 10px;display:block;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          No saved segments yet.<br>Preview an audience above, then save it.
+        </div>`;
         return;
       }
-      const keys     = Object.keys(items[0]);
-      const headRow  = document.getElementById(headRowId) ?? tbody.closest('table').querySelector('thead tr');
-      if (headRow) headRow.innerHTML = keys.map(k => `<th>${esc(k)}</th>`).join('');
-      tbody.innerHTML = items.map(c =>
-        `<tr>${keys.map(k => `<td>${renderValue(c[k])}</td>`).join('')}</tr>`
-      ).join('');
+
+      grid.innerHTML = data.map(s => `
+        <div class="segment-card">
+          <div style="padding:16px 16px 0;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+              <div>
+                <div style="font-size:0.8125rem;font-weight:600;color:#f0ebe3;margin-bottom:3px;">${esc(s.name)}</div>
+                <div style="font-size:0.73rem;color:#9a9085;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(s.description || '—')}</div>
+              </div>
+              <span class="stat-pill" style="flex-shrink:0;">${s.matchCount}</span>
+            </div>
+          </div>
+          <div style="padding:10px 16px;">
+            <div style="background:#111009;border:1px solid #2e2920;border-radius:5px;padding:8px 10px;overflow:hidden;">
+              <code style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#585048;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${esc((s.query || '').substring(0,90))}${(s.query||'').length > 90 ? '…' : ''}</code>
+            </div>
+          </div>
+          <div style="padding:0 16px 14px;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:0.68rem;color:#585048;font-family:'IBM Plex Mono',monospace;">${formatDate(s.createdAt)}</span>
+            <button class="btn-run run-seg-btn" data-id="${esc(s.id)}">RUN →</button>
+          </div>
+        </div>
+      `).join('');
+
+      grid.querySelectorAll('.run-seg-btn').forEach(btn =>
+        btn.addEventListener('click', () => runSegment(btn.dataset.id, btn))
+      );
+    } catch (e) {
+      grid.innerHTML = `<div style="color:#f87171;font-size:0.8rem;grid-column:1/-1;">Failed: ${esc(e.message)}</div>`;
     }
+  }
 
-    function renderValue(v) {
-      if (v === null || v === undefined) return '<span class="text-muted">—</span>';
-      if (typeof v === 'boolean') return v
-        ? '<span class="badge bg-success">Yes</span>'
-        : '<span class="badge bg-light text-secondary border">No</span>';
-      if (Array.isArray(v)) return v.map(i =>
-        `<span class="badge bg-secondary me-1">${esc(String(i))}</span>`).join('') || '<span class="text-muted">—</span>';
-      if (typeof v === 'object') return `<span class="text-muted small">${esc(JSON.stringify(v))}</span>`;
-      return esc(String(v));
+  async function runSegment(id, btn) {
+    btn.disabled    = true;
+    btn.textContent = '…';
+    document.getElementById('segment-run-results').style.display = 'none';
+    try {
+      const res  = await fetch(`${API}/segments/${id}/run`, { method:'POST', headers: headers() });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error ?? `Error ${res.status}`); return; }
+      document.getElementById('run-segment-title').textContent    = `${data.name} — ${data.total} contact${data.total !== 1 ? 's' : ''} matched`;
+      document.getElementById('run-query-display').textContent    = JSON.stringify(JSON.parse(data.query), null, 2);
+      renderTable('run-head', document.getElementById('run-body'), data.contacts);
+      document.getElementById('segment-run-results').style.display = 'block';
+      document.getElementById('segment-run-results').scrollIntoView({ behavior:'smooth', block:'start' });
+    } catch (e) {
+      alert(`Failed: ${e.message}`);
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'RUN →';
     }
+  }
 
-    function renderPagination(total, page, pageSize) {
-      const totalPages = Math.ceil(total / pageSize);
-      const ul = document.getElementById('pagination');
-      ul.innerHTML = '';
+  document.getElementById('close-run-btn').addEventListener('click', () => {
+    document.getElementById('segment-run-results').style.display = 'none';
+  });
 
-      const addItem = (label, targetPage, disabled = false, active = false) => {
-        ul.insertAdjacentHTML('beforeend', `
-          <li class="page-item ${disabled ? 'disabled' : ''} ${active ? 'active' : ''}">
-            <a class="page-link" href="#" data-page="${targetPage}">${label}</a>
-          </li>`);
-      };
+  // ── All contacts ───────────────────────────────────────────────────────────
 
-      addItem('&laquo;', page - 1, page === 1);
-      const range = visiblePages(page, totalPages);
-      let prev = null;
-      for (const p of range) {
-        if (prev !== null && p - prev > 1) addItem('…', -1, true);
-        addItem(p, p, false, p === page);
-        prev = p;
+  async function loadContacts(page) {
+    currentPage = page;
+    const tbody = document.getElementById('contacts-body');
+    tbody.innerHTML = `<tr><td style="text-align:center;color:#585048;padding:48px;font-size:0.8rem;" colspan="99">Loading…</td></tr>`;
+    try {
+      const res  = await fetch(`${API}/contacts?page=${page}&pageSize=${PAGE_SIZE}`, { headers: headers() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderTable('contacts-head', tbody, data.items);
+      renderPagination(data.total, data.page, data.pageSize);
+      const from = (page-1)*PAGE_SIZE+1, to = Math.min(page*PAGE_SIZE, data.total);
+      document.getElementById('contacts-status').textContent =
+        `Showing ${from}–${to} of ${data.total.toLocaleString()} contacts`;
+    } catch (e) {
+      tbody.innerHTML = `<tr><td style="text-align:center;color:#f87171;padding:48px;font-size:0.8rem;" colspan="99">Failed: ${esc(e.message)}</td></tr>`;
+      document.getElementById('contacts-status').textContent = '';
+    }
+  }
+
+  // ── Rendering ──────────────────────────────────────────────────────────────
+
+  function renderTable(headIdOrEl, tbody, items) {
+    if (!items || !items.length) {
+      tbody.innerHTML = `<tr><td style="text-align:center;color:#585048;padding:48px;font-size:0.8rem;" colspan="99">No contacts found.</td></tr>`;
+      return;
+    }
+    const keys    = Object.keys(items[0]);
+    const headRow = typeof headIdOrEl === 'string'
+      ? document.getElementById(headIdOrEl)
+      : headIdOrEl;
+    if (headRow) headRow.innerHTML = keys.map(k => `<th>${esc(k)}</th>`).join('');
+    tbody.innerHTML = items.map(c =>
+      `<tr>${keys.map(k => `<td>${renderCell(k, c[k])}</td>`).join('')}</tr>`
+    ).join('');
+  }
+
+  function renderCell(key, v) {
+    if (v === null || v === undefined) return `<span style="color:#2e2920;">—</span>`;
+    if (typeof v === 'boolean') {
+      return v
+        ? `<span class="tag tag-active">Active</span>`
+        : `<span class="tag tag-inactive">Inactive</span>`;
+    }
+    if (Array.isArray(v)) {
+      if (!v.length) return `<span style="color:#2e2920;">—</span>`;
+      return v.map(i => {
+        const label = String(i);
+        const cls   = label === 'VIP' ? 'tag-vip' : label === 'Trial' ? 'tag-blue' : 'tag-group';
+        return `<span class="tag ${cls}" style="margin-right:4px;">${esc(label)}</span>`;
+      }).join('');
+    }
+    if (typeof v === 'object') return `<span style="color:#585048;font-size:0.73rem;font-family:'IBM Plex Mono',monospace;">${esc(JSON.stringify(v))}</span>`;
+    const s = String(v);
+    // Email styling
+    if (s.includes('@')) return `<span style="font-family:'IBM Plex Mono',monospace;font-size:0.73rem;color:#9a9085;">${esc(s)}</span>`;
+    return esc(s);
+  }
+
+  function renderPagination(total, page, pageSize) {
+    const totalPages = Math.ceil(total / pageSize);
+    const ul = document.getElementById('pagination');
+    ul.innerHTML = '';
+
+    const make = (label, target, disabled=false, active=false) => {
+      const btn = document.createElement('button');
+      btn.className = 'page-btn' + (active ? ' active' : '');
+      btn.innerHTML = label;
+      btn.disabled  = disabled;
+      if (!disabled && !active) btn.onclick = () => loadContacts(target);
+      ul.appendChild(btn);
+    };
+
+    make('←', page-1, page===1);
+    const range = visiblePages(page, totalPages);
+    let prev = null;
+    for (const p of range) {
+      if (prev !== null && p-prev > 1) {
+        const sp = document.createElement('span');
+        sp.style.cssText = 'color:#585048;font-size:0.75rem;padding:0 4px;';
+        sp.textContent = '…';
+        ul.appendChild(sp);
       }
-      addItem('&raquo;', page + 1, page === totalPages);
-
-      ul.querySelectorAll('a[data-page]').forEach(a => {
-        a.addEventListener('click', e => {
-          e.preventDefault();
-          const p = parseInt(a.dataset.page);
-          if (p > 0 && p <= totalPages) loadContacts(p);
-        });
-      });
+      make(p, p, false, p===page);
+      prev = p;
     }
+    make('→', page+1, page===totalPages);
+  }
 
-    function visiblePages(current, total) {
-      const delta = 2;
-      const pages = new Set([1, total]);
-      for (let i = current - delta; i <= current + delta; i++) {
-        if (i > 0 && i <= total) pages.add(i);
-      }
-      return [...pages].sort((a, b) => a - b);
-    }
+  function visiblePages(current, total) {
+    const pages = new Set([1, total]);
+    for (let i = current-2; i <= current+2; i++) if (i>0 && i<=total) pages.add(i);
+    return [...pages].sort((a,b)=>a-b);
+  }
 
-    function esc(str) {
-      return String(str ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    loadTenants();
-  </script>
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  loadTenants();
+</script>
 </body>
 </html>

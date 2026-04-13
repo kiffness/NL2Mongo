@@ -1,3 +1,5 @@
+namespace NL2Mongo.Api.Helpers;
+
 public enum ErrorType
 {
     NotFound,

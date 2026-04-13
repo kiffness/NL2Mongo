@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using MongoDB.Bson;
 
+namespace NL2Mongo.Api.Helpers;
+
 public static class QueryValidator
 {
     // Matches ISO 8601 datetime strings e.g. "2024-01-01T00:00:00Z"

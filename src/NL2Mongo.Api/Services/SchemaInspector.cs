@@ -2,6 +2,8 @@ using Microsoft.Extensions.Caching.Memory;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
+namespace NL2Mongo.Api.Services;
+
 public record SchemaDescription(IReadOnlyList<FieldDescriptor> Fields);
 
 // IsExhaustive = true means SampleValues is the complete set of possible values (enum-like).

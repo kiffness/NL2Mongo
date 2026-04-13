@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+namespace NL2Mongo.Api.Records;
+
 public record EvaluationCase(
     string Id,
     string Description,

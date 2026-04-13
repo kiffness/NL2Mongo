@@ -1,4 +1,7 @@
 using System.Text.Json.Serialization;
+using NL2Mongo.Api.Helpers;
+
+namespace NL2Mongo.Api.Services;
 
 public class OllamaService(HttpClient http, IConfiguration config)
 {
