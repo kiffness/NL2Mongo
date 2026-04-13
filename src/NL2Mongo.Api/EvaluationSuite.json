@@ -1,4 +1,5 @@
 [
+  // ── nl2mongo: existing equality + compound cases ──────────────────────────────
   {
     "id": "nl2mongo-active-contacts",
     "description": "active contacts",
@@ -69,6 +70,128 @@
     "minCount": 1,
     "allMustHave": { "isActive": true, "occupation": "Nurse", "groups": "Newsletter" }
   },
+
+  // ── nl2mongo: negation ────────────────────────────────────────────────────────
+  {
+    "id": "nl2mongo-not-vip",
+    "description": "contacts who are not in the VIP group",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "noneCanHave": { "groups": "VIP" }
+  },
+  {
+    "id": "nl2mongo-not-engineers",
+    "description": "contacts who are not engineers",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "noneCanHave": { "occupation": "Engineer" }
+  },
+  {
+    "id": "nl2mongo-not-retired",
+    "description": "contacts who are not retired",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "noneCanHave": { "occupation": "Retired" }
+  },
+  {
+    "id": "nl2mongo-inactive-not-newsletter",
+    "description": "inactive contacts who are not in the Newsletter group",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": false },
+    "noneCanHave": { "groups": "Newsletter" }
+  },
+  {
+    "id": "nl2mongo-active-not-trial",
+    "description": "active contacts who are not in the Trial group",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true },
+    "noneCanHave": { "groups": "Trial" }
+  },
+
+  // ── nl2mongo: range queries (age) ─────────────────────────────────────────────
+  // Note: allMustHave/noneCanHave only support equality checks; range assertions
+  // use minCount only. The value of these cases is verifying the model generates
+  // a valid, non-empty query using $gt/$lt/$gte/$lte.
+  {
+    "id": "nl2mongo-age-over-50",
+    "description": "contacts over 50",
+    "tenant": "nl2mongo",
+    "minCount": 1
+  },
+  {
+    "id": "nl2mongo-age-under-30",
+    "description": "contacts under 30",
+    "tenant": "nl2mongo",
+    "minCount": 1
+  },
+  {
+    "id": "nl2mongo-age-between-25-45",
+    "description": "contacts aged between 25 and 45",
+    "tenant": "nl2mongo",
+    "minCount": 1
+  },
+  {
+    "id": "nl2mongo-active-engineers-over-40",
+    "description": "active engineers over 40",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "occupation": "Engineer" }
+  },
+  {
+    "id": "nl2mongo-young-vip",
+    "description": "VIP members under 35",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "groups": "VIP" }
+  },
+
+  // ── nl2mongo: date queries ────────────────────────────────────────────────────
+  // Seed uses f.Date.Past(3) so all contacts fall within the last 3 years.
+  // "last 2 years" covers ~2/3 of the dataset — minCount: 1 is always safe.
+  {
+    "id": "nl2mongo-created-last-2-years",
+    "description": "contacts who joined in the last 2 years",
+    "tenant": "nl2mongo",
+    "minCount": 1
+  },
+  {
+    "id": "nl2mongo-created-since-2024",
+    "description": "contacts added since the start of 2024",
+    "tenant": "nl2mongo",
+    "minCount": 1
+  },
+  {
+    "id": "nl2mongo-active-created-last-year",
+    "description": "active contacts who signed up in the last year",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true }
+  },
+
+  // ── nl2mongo: multi-value OR ──────────────────────────────────────────────────
+  {
+    "id": "nl2mongo-nurses-or-teachers",
+    "description": "nurses or teachers",
+    "tenant": "nl2mongo",
+    "minCount": 1
+  },
+  {
+    "id": "nl2mongo-vip-or-beta",
+    "description": "contacts in the VIP or Beta group",
+    "tenant": "nl2mongo",
+    "minCount": 1
+  },
+  {
+    "id": "nl2mongo-active-nurses-or-teachers",
+    "description": "active nurses or teachers",
+    "tenant": "nl2mongo",
+    "minCount": 1,
+    "allMustHave": { "isActive": true }
+  },
+
+  // ── dunmow: existing equality + compound cases ────────────────────────────────
   {
     "id": "dunmow-active-buyers",
     "description": "active buyers",
@@ -105,10 +228,107 @@
     "allMustHave": { "isActive": true, "propertyInterest": "Selling" }
   },
   {
-    "id": "dunmow-active-leads-referral",
+    "id": "dunmow-active-leads-website",
     "description": "active leads from the website",
     "tenant": "dunmowPropertyGroup",
     "minCount": 1,
     "allMustHave": { "isActive": true, "status": "Lead", "source": "Website" }
+  },
+
+  // ── dunmow: negation ──────────────────────────────────────────────────────────
+  {
+    "id": "dunmow-not-essex",
+    "description": "contacts who are not in Essex",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "noneCanHave": { "county": "Essex" }
+  },
+  {
+    "id": "dunmow-not-cold",
+    "description": "contacts who are not cold leads",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "noneCanHave": { "status": "Cold" }
+  },
+  {
+    "id": "dunmow-active-not-cold-call",
+    "description": "active contacts who were not acquired via cold call",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "isActive": true },
+    "noneCanHave": { "source": "Cold Call" }
+  },
+  {
+    "id": "dunmow-current-clients-not-essex",
+    "description": "current clients who are not in Essex",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "status": "Current Client" },
+    "noneCanHave": { "county": "Essex" }
+  },
+
+  // ── dunmow: range queries (budget, bedrooms) ──────────────────────────────────
+  {
+    "id": "dunmow-budget-over-500",
+    "description": "buyers with a budget over 500",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "propertyInterest": "Buying" }
+  },
+  {
+    "id": "dunmow-budget-under-300",
+    "description": "contacts with a budget under 300",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1
+  },
+  {
+    "id": "dunmow-large-properties",
+    "description": "contacts interested in properties with 4 or more bedrooms",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1
+  },
+  {
+    "id": "dunmow-active-buyers-high-budget",
+    "description": "active buyers with a budget between 400 and 700",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "isActive": true, "propertyInterest": "Buying" }
+  },
+
+  // ── dunmow: date queries ──────────────────────────────────────────────────────
+  // Seed uses f.Date.Past(2) — all contacts fall within the last 2 years.
+  {
+    "id": "dunmow-created-last-year",
+    "description": "leads added in the last year",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "status": "Lead" }
+  },
+  {
+    "id": "dunmow-created-since-2025",
+    "description": "contacts who registered since the start of 2025",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1
+  },
+
+  // ── dunmow: multi-value OR ────────────────────────────────────────────────────
+  {
+    "id": "dunmow-buying-or-renting",
+    "description": "contacts interested in buying or renting",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1
+  },
+  {
+    "id": "dunmow-essex-or-suffolk",
+    "description": "contacts in Essex or Suffolk",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1
+  },
+  {
+    "id": "dunmow-active-buyers-or-renters",
+    "description": "active contacts looking to buy or rent",
+    "tenant": "dunmowPropertyGroup",
+    "minCount": 1,
+    "allMustHave": { "isActive": true }
   }
 ]

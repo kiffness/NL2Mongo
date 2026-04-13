@@ -1,6 +1,10 @@
 using Bogus;
+using Microsoft.Extensions.Logging;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Driver;
+
+using var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+var log = loggerFactory.CreateLogger("Seed");
 
 var pack = new ConventionPack { new CamelCaseElementNameConvention() };
 ConventionRegistry.Register("CamelCase", pack, t => true);
@@ -12,11 +16,11 @@ var client = new MongoClient("mongodb://localhost:27017");
 
 // ── Tenant 1: nl2mongo ────────────────────────────────────────────────────────
 
-var nl2mongoDb = client.GetDatabase("nl2mongo");
+var nl2mongoDb       = client.GetDatabase("nl2mongo");
 var nl2mongoContacts = nl2mongoDb.GetCollection<Contact>("contacts");
 
 await nl2mongoContacts.DeleteManyAsync(FilterDefinition<Contact>.Empty);
-Console.WriteLine("Cleared nl2mongo.contacts.");
+log.LogInformation("Cleared nl2mongo.contacts");
 
 var groups      = new[] { "Newsletter", "VIP", "Trial", "Alumni", "Beta" };
 var occupations = new[] { "Engineer", "Teacher", "Nurse", "Retired", "Designer", "Lawyer", "Accountant", "Manager" };
@@ -34,15 +38,15 @@ var nl2mongoFaker = new Faker<Contact>()
     .RuleFor(c => c.CreatedAt,  f => f.Date.Past(3).ToUniversalTime());
 
 await nl2mongoContacts.InsertManyAsync(nl2mongoFaker.Generate(1000));
-Console.WriteLine("Inserted 1000 contacts into nl2mongo.contacts.");
+log.LogInformation("Inserted 1000 contacts into nl2mongo.contacts");
 
 // ── Tenant 2: dunmowPropertyGroup ─────────────────────────────────────────────
 
-var dunmowDb = client.GetDatabase("dunmowPropertyGroup");
+var dunmowDb       = client.GetDatabase("dunmowPropertyGroup");
 var dunmowContacts = dunmowDb.GetCollection<Lead>("contacts");
 
 await dunmowContacts.DeleteManyAsync(FilterDefinition<Lead>.Empty);
-Console.WriteLine("Cleared dunmowPropertyGroup.contacts.");
+log.LogInformation("Cleared dunmowPropertyGroup.contacts");
 
 var counties          = new[] { "Essex", "Suffolk", "Norfolk", "Kent", "Surrey", "Hampshire", "Hertfordshire", "Oxfordshire", "Berkshire", "Cambridgeshire" };
 var statuses          = new[] { "Lead", "Current Client", "Past Client", "Cold" };
@@ -64,7 +68,7 @@ var dunmowFaker = new Faker<Lead>()
     .RuleFor(l => l.CreatedAt,        f => f.Date.Past(2).ToUniversalTime());
 
 await dunmowContacts.InsertManyAsync(dunmowFaker.Generate(1000));
-Console.WriteLine("Inserted 1000 contacts into dunmowPropertyGroup.contacts.");
+log.LogInformation("Inserted 1000 contacts into dunmowPropertyGroup.contacts");
 
 // ── Records ───────────────────────────────────────────────────────────────────
 

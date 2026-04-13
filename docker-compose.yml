@@ -15,6 +15,34 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
+  seq:
+    image: datalust/seq:latest
+    ports:
+      - "5341:5341"   # ingestion (HTTP)
+      - "8081:80"     # web UI → http://localhost:8081
+    environment:
+      - ACCEPT_EULA=Y
+    volumes:
+      - seq_data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5100:5100"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=5100
+      - ConnectionStrings__MongoDB=mongodb://mongo:27017
+      - OllamaBaseUrl=http://ollama:11434
+      - SeqServerUrl=http://seq:5341
+    depends_on:
+      - mongo
+      - ollama
+      - seq
+
 volumes:
   mongo_data:
   ollama_data:
+  seq_data:

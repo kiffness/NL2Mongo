@@ -1,9 +1,10 @@
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 using NL2Mongo.Api.Helpers;
 
 namespace NL2Mongo.Api.Services;
 
-public class OllamaService(HttpClient http, IConfiguration config)
+public class OllamaService(HttpClient http, IConfiguration config, ILogger<OllamaService> logger)
 {
     private readonly string _model = config["OllamaModel"] ?? "llama3.1:8b";
 
@@ -20,6 +21,7 @@ public class OllamaService(HttpClient http, IConfiguration config)
             stream = false
         };
 
+        var sw = Stopwatch.StartNew();
         HttpResponseMessage response;
         try
         {
@@ -27,22 +29,42 @@ public class OllamaService(HttpClient http, IConfiguration config)
         }
         catch (Exception ex)
         {
+            logger.LogError(ex, "Ollama unreachable after {ElapsedMs}ms", sw.ElapsedMilliseconds);
             return Result<string>.Fail(new Error($"Could not reach Ollama: {ex.Message}", ErrorType.Internal));
         }
+        finally
+        {
+            sw.Stop();
+        }
+
+        sw.Stop();
 
         if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError("Ollama returned HTTP {StatusCode} in {ElapsedMs}ms",
+                (int)response.StatusCode, sw.ElapsedMilliseconds);
             return Result<string>.Fail(new Error($"Ollama returned HTTP {(int)response.StatusCode}", ErrorType.Internal));
+        }
+
+        logger.LogInformation("Ollama responded in {ElapsedMs}ms for model {Model}",
+            sw.ElapsedMilliseconds, _model);
 
         var body = await response.Content.ReadFromJsonAsync<OllamaChatResponse>();
         var text = body?.Message?.Content?.Trim();
 
         if (string.IsNullOrEmpty(text))
+        {
+            logger.LogWarning("Ollama returned an empty response body");
             return Result<string>.Fail(new Error("Empty response from Ollama", ErrorType.Internal));
+        }
 
         var json = ExtractJson(text);
         if (json is null)
+        {
+            logger.LogWarning("Ollama response contained no JSON object. RawResponse={RawResponse}", text);
             return Result<string>.Fail(new Error(
                 $"Model did not return a JSON object. Raw response: {text}", ErrorType.Validation));
+        }
 
         return Result<string>.Ok(json);
     }
@@ -83,19 +105,63 @@ public class OllamaService(HttpClient http, IConfiguration config)
         sb.AppendLine("- Use standard MongoDB operators where needed: $gt, $lt, $gte, $lte, $in, $nin, $and, $or, $regex.");
         sb.AppendLine("- For array fields use: {\"fieldName\": \"Value\"} for a single value or {\"fieldName\": {\"$in\": [\"A\",\"B\"]}} for multiple.");
         sb.AppendLine("- For date comparisons use ISO 8601 strings, e.g. {\"createdAt\": {\"$gte\": \"2024-01-01T00:00:00Z\"}}. Never use ISODate().");
+        sb.AppendLine("- For negation (\"not in\", \"excluding\", \"without\", \"who are not\"), use $nin for both array and scalar fields: {\"groups\": {\"$nin\": [\"VIP\"]}} or {\"occupation\": {\"$nin\": [\"Engineer\"]}}. Never use $ne or $not.");
         sb.AppendLine();
+
+        // Compute anchors for date examples so the model sees concrete ISO strings
+        // relative to today rather than placeholder text.
+        var oneYearAgo  = DateTime.UtcNow.AddYears(-1).ToString("yyyy-MM-ddT00:00:00Z");
+        var sixMonthsAgo = DateTime.UtcNow.AddMonths(-6).ToString("yyyy-MM-ddT00:00:00Z");
+
         sb.AppendLine("Examples:");
+
         sb.AppendLine("User: active contacts");
         sb.AppendLine("Assistant: {\"isActive\": true}");
         sb.AppendLine();
+
         sb.AppendLine("User: engineers over 30");
         sb.AppendLine("Assistant: {\"occupation\": \"Engineer\", \"age\": {\"$gt\": 30}}");
         sb.AppendLine();
+
+        sb.AppendLine("User: contacts aged between 25 and 45");
+        sb.AppendLine("Assistant: {\"age\": {\"$gte\": 25, \"$lte\": 45}}");
+        sb.AppendLine();
+
         sb.AppendLine("User: VIP or Newsletter members who are active");
         sb.AppendLine("Assistant: {\"groups\": {\"$in\": [\"VIP\", \"Newsletter\"]}, \"isActive\": true}");
         sb.AppendLine();
+
         sb.AppendLine("User: nurses or teachers under 40 in the United Kingdom");
         sb.AppendLine("Assistant: {\"occupation\": {\"$in\": [\"Nurse\", \"Teacher\"]}, \"age\": {\"$lt\": 40}, \"country\": \"United Kingdom\"}");
+        sb.AppendLine();
+
+        sb.AppendLine("User: contacts not in the VIP group");
+        sb.AppendLine("Assistant: {\"groups\": {\"$nin\": [\"VIP\"]}}");
+        sb.AppendLine();
+
+        sb.AppendLine("User: contacts who are not engineers");
+        sb.AppendLine("Assistant: {\"occupation\": {\"$nin\": [\"Engineer\"]}}");
+        sb.AppendLine();
+
+        sb.AppendLine($"User: contacts who joined in the last year");
+        sb.AppendLine($"Assistant: {{\"createdAt\": {{\"$gte\": \"{oneYearAgo}\"}}}}");
+        sb.AppendLine();
+
+        sb.AppendLine($"User: contacts added in the last 6 months");
+        sb.AppendLine($"Assistant: {{\"createdAt\": {{\"$gte\": \"{sixMonthsAgo}\"}}}}");
+        sb.AppendLine();
+
+        sb.AppendLine("User: active contacts not in the Trial group added in the last year");
+        sb.AppendLine($"Assistant: {{\"isActive\": true, \"groups\": {{\"$nin\": [\"Trial\"]}}, \"createdAt\": {{\"$gte\": \"{oneYearAgo}\"}}}}");
+
+        sb.AppendLine("User: active engineers over 40");
+        sb.AppendLine("Assistant: {\"isActive\": true, \"occupation\": \"Engineer\", \"age\": {\"$gt\": 40}}");
+        sb.AppendLine();
+
+        sb.AppendLine("User: active buyers with a budget between 400 and 700");
+        sb.AppendLine("Assistant: {\"isActive\": true, \"propertyInterest\": \"Buying\", \"budget\": {\"$gte\": 400, \"$lte\": 700}}");
+        sb.AppendLine();
+
         return sb.ToString();
     }
 }

@@ -8,4 +8,5 @@ public record SegmentPreview(
     IReadOnlyList<JsonElement> Contacts,
     int Total,
     string GeneratedQuery,
-    long ElapsedMs);
+    long ElapsedMs,
+    string? Hint = null);

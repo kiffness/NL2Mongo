@@ -520,6 +520,12 @@
             </div>
           </div>
 
+          <!-- Zero-result hint (shown only when the query ran but matched nothing) -->
+          <div id="preview-hint" style="display:none;padding:10px 20px;border-bottom:1px solid #2e2920;background:#221e14;display:none;align-items:center;gap:8px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="preview-hint-text" style="font-size:0.78rem;color:#c8a96e;"></span>
+          </div>
+
           <!-- Query panel (collapsed by default) -->
           <div id="query-panel" style="display:none;padding:16px 20px;border-bottom:1px solid #2e2920;">
             <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:#585048;font-weight:600;margin-bottom:8px;font-family:'IBM Plex Mono',monospace;">Generated MongoDB Filter</div>
@@ -726,6 +732,15 @@
       const elText  = document.getElementById('elapsed-text');
       elText.textContent = formatElapsed(data.elapsedMs);
       elapsed.style.display = data.elapsedMs != null ? 'inline-flex' : 'none';
+
+      const hintEl = document.getElementById('preview-hint');
+      const hintText = document.getElementById('preview-hint-text');
+      if (data.hint) {
+        hintText.textContent = data.hint;
+        hintEl.style.display = 'flex';
+      } else {
+        hintEl.style.display = 'none';
+      }
 
       document.getElementById('query-display').textContent = JSON.stringify(JSON.parse(data.generatedQuery), null, 2);
 

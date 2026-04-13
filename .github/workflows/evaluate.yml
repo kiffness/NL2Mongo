@@ -1,0 +1,100 @@
+name: Accuracy Regression Check
+
+# Runs the evaluation suite against a live stack to catch prompt regressions
+# before they reach deployment.
+#
+# Requires a self-hosted runner with:
+#   - Docker + docker compose
+#   - NVIDIA GPU with drivers + CUDA (for Ollama GPU passthrough)
+#   - Python 3 (for check-accuracy.sh)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/NL2Mongo.Api/**'
+      - 'EvaluationSuite.json'
+      - 'scripts/check-accuracy.sh'
+      - '.github/workflows/evaluate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/NL2Mongo.Api/**'
+      - 'EvaluationSuite.json'
+  workflow_dispatch:
+    inputs:
+      min_accuracy:
+        description: 'Minimum accuracy threshold (%)'
+        required: false
+        default: '80'
+
+jobs:
+  evaluate:
+    name: Run evaluation suite
+    runs-on: self-hosted   # must have GPU + Ollama-capable Docker
+
+    env:
+      API_URL: http://localhost:5100
+      MIN_ACCURACY: ${{ github.event.inputs.min_accuracy || '80' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start infrastructure (mongo, ollama, seq, api)
+        run: docker compose up -d --build
+
+      - name: Pull Ollama model
+        run: |
+          echo "Waiting for Ollama to be ready..."
+          for i in $(seq 1 12); do
+            if docker compose exec -T ollama ollama list > /dev/null 2>&1; then
+              break
+            fi
+            echo "  attempt $i/12..."
+            sleep 5
+          done
+          docker compose exec -T ollama ollama pull llama3.1:8b
+
+      - name: Seed database
+        run: |
+          cd src/NL2Mongo.Seed
+          dotnet run
+
+      - name: Wait for API to be healthy
+        run: |
+          echo "Waiting for API..."
+          for i in $(seq 1 24); do
+            if curl -sf -H "X-Tenant: nl2mongo" "$API_URL/health" > /dev/null; then
+              echo "API is ready"
+              break
+            fi
+            if [ "$i" -eq 24 ]; then
+              echo "ERROR: API did not become healthy in time"
+              docker compose logs api
+              exit 1
+            fi
+            echo "  attempt $i/24..."
+            sleep 5
+          done
+
+      - name: Run accuracy check
+        run: bash scripts/check-accuracy.sh
+
+      - name: Upload evaluation report
+        if: always()
+        run: |
+          curl -sf -X POST \
+            -H "Content-Type: application/json" \
+            "$API_URL/segments/evaluate" \
+            -o evaluation-report.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evaluation-report
+          path: evaluation-report.json
+
+      - name: Stop infrastructure
+        if: always()
+        run: docker compose down

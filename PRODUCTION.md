@@ -19,10 +19,10 @@
 
 ## Observability
 
-- [ ] **Structured logging** — replace `Console.WriteLine` in the seed with proper `ILogger` usage throughout the API. Use Serilog or similar with log levels.
-- [ ] **Query logging** — log every natural language description alongside the generated filter and result count. This becomes the raw material for prompt hardening (see below).
-- [ ] **Failed query tracking** — specifically flag and log queries where the LLM failed, validation rejected the filter, or 0 results were returned. These are your improvement candidates.
-- [ ] **Performance metrics** — track Ollama response time per request. Useful for spotting model degradation or infrastructure issues.
+- [x] **Structured logging** — Serilog wired throughout the API (Console + Seq sinks). `ILogger` replaces `Console.WriteLine` in the Seed. Bootstrap logger captures startup failures. `app.UseSerilogRequestLogging()` provides structured HTTP access logs.
+- [x] **Query logging** — every `POST /segments/preview` logs tenant, description, generated filter, match count, and total elapsed ms as structured properties queryable in Seq.
+- [x] **Failed query tracking** — LLM failures, validation rejections, and zero-result queries each emit a `LogWarning` with a `Stage` property so they can be filtered and alerted on in Seq.
+- [x] **Performance metrics** — `OllamaService` measures and logs `ElapsedMs` for every Ollama HTTP call. Zero-result and failure paths also carry elapsed time.
 
 ## Prompt hardening
 
@@ -39,9 +39,9 @@
 
 ## Testing
 
-- [ ] **Expand evaluation suite** — 16 test cases is a good baseline but a thin safety net. Add cases covering date queries, range queries, negation ("contacts not in the VIP group"), and any query patterns specific to each real client.
+- [x] **Expand evaluation suite** — expanded from 16 → 49 cases. New coverage: negation (`$nin`/`$ne`), age range (`$gt`/`$lt`/`$between`), date queries (`$gte` on `createdAt`), multi-value OR (`$in`), and compound combinations of all of the above across both tenants. EvaluationSuite.json now supports `//` comments via `JsonCommentHandling.Skip`.
 - [ ] **Per-client evaluation suites** — once real clients are onboarded, build a separate evaluation suite per tenant using their actual field names and values.
-- [ ] **Regression baseline** — run `POST /segments/evaluate` as part of CI so accuracy regressions are caught before deployment, especially after prompt changes.
+- [x] **Regression baseline** — `.github/workflows/evaluate.yml` runs `POST /segments/evaluate` on every push/PR to `main` (self-hosted runner). `scripts/check-accuracy.sh` fails the build if accuracy drops below `MIN_ACCURACY` (default 80%). Failed cases are printed with their generated query for debugging.
 - [ ] **Load testing** — Ollama is single-threaded by default. Test what happens under concurrent requests and document the throughput limits.
 
 ## Operational
