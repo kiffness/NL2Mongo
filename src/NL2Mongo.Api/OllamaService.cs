@@ -1,14 +1,14 @@
 using System.Text.Json.Serialization;
 
-public class OllamaService(HttpClient http)
+public class OllamaService(HttpClient http, IConfiguration config)
 {
-    private const string Model = "llama3.1:8b";
+    private readonly string _model = config["OllamaModel"] ?? "llama3.1:8b";
 
     public async Task<Result<string>> GenerateFilterAsync(string description, SchemaDescription schema)
     {
         var request = new
         {
-            model = Model,
+            model = _model,
             messages = new[]
             {
                 new { role = "system", content = BuildSystemPrompt(schema) },

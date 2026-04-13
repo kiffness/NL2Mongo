@@ -15,7 +15,7 @@ builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(connectionStrin
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SchemaInspector>();
 builder.Services.AddHttpClient<OllamaService>(client =>
-    client.BaseAddress = new Uri("http://localhost:11434"));
+    client.BaseAddress = new Uri(builder.Configuration["OllamaBaseUrl"] ?? "http://localhost:11434"));
 
 // CORS — allow the static frontend to call the API
 builder.Services.AddCors(options =>
