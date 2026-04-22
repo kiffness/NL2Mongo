@@ -18,10 +18,11 @@ services:
   seq:
     image: datalust/seq:latest
     ports:
-      - "5341:5341"   # ingestion (HTTP)
-      - "8081:80"     # web UI → http://localhost:8081
+      - "5341:5341" # ingestion (HTTP)
+      - "8081:80" # web UI → http://localhost:8081
     environment:
       - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_ADMINPASSWORD=Admin
     volumes:
       - seq_data:/data
 
@@ -30,10 +31,10 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "5100:5100"
+      - "5000:5000"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_HTTP_PORTS=5100
+      - ASPNETCORE_HTTP_PORTS=5000
       - ConnectionStrings__MongoDB=mongodb://mongo:27017
       - OllamaBaseUrl=http://ollama:11434
       - SeqServerUrl=http://seq:5341
