@@ -178,6 +178,77 @@ try
             .ToApiResult();
     });
 
+    app.MapPost("/aggregations/preview", async (
+        AggregationRequest req,
+        HttpRequest request,
+        IMongoClient client,
+        SchemaInspector inspector,
+        OllamaService ollama,
+        ILogger<Program> logger) =>
+    {
+        if (string.IsNullOrWhiteSpace(req.Description))
+            return Result<AggregationPreview>.Fail(new Error("Description is required", ErrorType.Validation)).ToApiResult();
+
+        var headerError = TryGetTenantDb(request, client, out var db);
+        if (headerError is not null) return headerError;
+
+        var tenant = request.Headers["X-Tenant"].FirstOrDefault()!;
+        var sw     = System.Diagnostics.Stopwatch.StartNew();
+
+        logger.LogInformation("AggregationPreview started. Tenant={Tenant} Description={Description}", tenant, req.Description);
+
+        var collectionName = await ResolveCollectionNameAsync(db!);
+        var allSchemas     = await inspector.InspectAllAsync(db!);
+
+        var pipelineResult = await ollama.GeneratePipelineAsync(req.Description, allSchemas);
+        if (!pipelineResult.IsSuccess)
+        {
+            logger.LogWarning("AggregationPreview failed at LLM stage. Tenant={Tenant} Description={Description} Reason={Reason}",
+                tenant, req.Description, pipelineResult.Error!.Message);
+            return pipelineResult.ToApiResult();
+        }
+
+        var validationResult = PipelineValidator.Validate(pipelineResult.Value!);
+        if (!validationResult.IsSuccess)
+        {
+            logger.LogWarning("AggregationPreview failed at validation. Tenant={Tenant} Description={Description} GeneratedPipeline={GeneratedPipeline} Reason={Reason}",
+                tenant, req.Description, pipelineResult.Value, validationResult.Error!.Message);
+            return validationResult.ToApiResult();
+        }
+
+        var collection = db!.GetCollection<BsonDocument>(collectionName);
+        var pipeline   = validationResult.Value!
+            .Select(stage => stage.AsBsonDocument)
+            .ToList();
+
+        var matchedDocs = await collection
+            .Aggregate<BsonDocument>(pipeline)
+            .ToListAsync();
+
+        sw.Stop();
+
+        var items = matchedDocs
+            .Select(d => System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(d.ToJson(jsonSettings)))
+            .ToList();
+
+        var generatedPipeline = validationResult.Value!.ToJson(jsonSettings);
+
+        if (items.Count == 0)
+        {
+            logger.LogWarning("AggregationPreview returned zero results. Tenant={Tenant} Description={Description} GeneratedPipeline={GeneratedPipeline} ElapsedMs={ElapsedMs}",
+                tenant, req.Description, generatedPipeline, sw.ElapsedMilliseconds);
+            const string hint = "No results returned. The pipeline looks valid — try rephrasing your question or check that the field values you mentioned exist in your data.";
+            return Result<AggregationPreview>.Ok(new AggregationPreview(items, 0, generatedPipeline, sw.ElapsedMilliseconds, hint))
+                .ToApiResult();
+        }
+
+        logger.LogInformation("AggregationPreview completed. Tenant={Tenant} Description={Description} ResultCount={ResultCount} ElapsedMs={ElapsedMs}",
+            tenant, req.Description, items.Count, sw.ElapsedMilliseconds);
+
+        return Result<AggregationPreview>.Ok(new AggregationPreview(items, items.Count, generatedPipeline, sw.ElapsedMilliseconds))
+            .ToApiResult();
+    });
+
     app.MapPost("/segments", async (
         SegmentSaveRequest req,
         HttpRequest request,
@@ -334,6 +405,11 @@ finally
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/// <summary>
+/// Attempts to resolve the tenant database from the <c>X-Tenant</c> header.
+/// Returns an <see cref="IResult"/> error if the header is missing; otherwise
+/// sets <paramref name="db"/> to the tenant database and returns null.
+/// </summary>
 static IResult? TryGetTenantDb(HttpRequest request, IMongoClient client, out IMongoDatabase? db)
 {
     var tenant = request.Headers["X-Tenant"].FirstOrDefault();
@@ -346,6 +422,11 @@ static IResult? TryGetTenantDb(HttpRequest request, IMongoClient client, out IMo
     return null;
 }
 
+/// <summary>
+/// Resolve the primary collection name used for contacts in the given database.
+/// Prefers a collection named <c>Contacts</c> (case-insensitive) and falls back
+/// to the default <c>contacts</c> name.
+/// </summary>
 static async Task<string> ResolveCollectionNameAsync(IMongoDatabase db)
 {
     var cursor = await db.ListCollectionNamesAsync();
@@ -356,6 +437,10 @@ static async Task<string> ResolveCollectionNameAsync(IMongoDatabase db)
 
 // ── Evaluation helpers ────────────────────────────────────────────────────────
 
+/// <summary>
+/// Runs a single evaluation case against a tenant database using the provided
+/// <see cref="SchemaInspector"/> and <see cref="OllamaService"/>.
+/// </summary>
 static async Task<EvaluationResult> RunEvaluationCaseAsync(
     EvaluationCase testCase,
     IMongoClient client,
@@ -421,14 +506,16 @@ static async Task<EvaluationResult> RunEvaluationCaseAsync(
     }
     catch (Exception ex)
     {
+        // Catch-all to ensure a single failing evaluation case doesn't abort the suite.
         return new EvaluationResult(testCase.Id, testCase.Description, false,
             $"Exception: {ex.Message}", 0, "");
     }
 }
 
-// Returns the name of the first field that fails the check, or null if all pass.
-// mustMatch=true  → field must equal expected value  (allMustHave)
-// mustMatch=false → field must NOT equal expected value (noneCanHave)
+/// <summary>
+/// Returns the name of the first field that fails the assertion checks, or null on success.
+/// <paramref name="mustMatch"/> indicates whether the field must match (<c>true</c>) or must not match (<c>false</c>).
+/// </summary>
 static string? CheckMustHave(
     System.Text.Json.JsonElement doc,
     Dictionary<string, System.Text.Json.JsonElement> assertions,
@@ -444,6 +531,10 @@ static string? CheckMustHave(
     return null;
 }
 
+/// <summary>
+/// Compares JSON element values for equality. Handles booleans, strings, numbers,
+/// and the special-case where the actual value may be an array containing the expected string.
+/// </summary>
 static bool JsonValuesMatch(System.Text.Json.JsonElement actual, System.Text.Json.JsonElement expected)
 {
     switch (expected.ValueKind)
@@ -454,7 +545,8 @@ static bool JsonValuesMatch(System.Text.Json.JsonElement actual, System.Text.Jso
 
         case System.Text.Json.JsonValueKind.String:
             var expectedStr = expected.GetString();
-            // Array field (e.g. groups): check if value is contained
+            // Special-case: if the actual document has an array for this field
+            // (e.g. groups) consider the match successful when any item equals the expected string.
             if (actual.ValueKind == System.Text.Json.JsonValueKind.Array)
                 return actual.EnumerateArray().Any(item =>
                     item.ValueKind == System.Text.Json.JsonValueKind.String &&

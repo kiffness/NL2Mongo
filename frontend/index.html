@@ -435,6 +435,12 @@
         </svg>
         Segments
       </button>
+      <button class="nav-item" id="nav-aggregations" onclick="showSection('aggregations')" style="margin-top:2px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        Aggregations
+      </button>
       <button class="nav-item" id="nav-contacts" onclick="showSection('contacts')" style="margin-top:2px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
@@ -591,6 +597,78 @@
 
       </div><!-- /section-segments -->
 
+      <!-- ══════════ AGGREGATIONS SECTION ══════════ -->
+      <div id="section-aggregations" style="display:none;">
+
+        <!-- AI Builder -->
+        <div class="panel rise" style="padding:22px;margin-bottom:20px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
+            <div style="width:34px;height:34px;border-radius:8px;background:rgba(252,84,4,0.1);border:1px solid rgba(252,84,4,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fc5404" stroke-width="1.8" stroke-linecap="round">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </div>
+            <div>
+              <div style="font-size:0.875rem;font-weight:600;color:#f0ebe3;">AI Aggregation Builder</div>
+              <div style="font-size:0.73rem;color:#9a9085;margin-top:2px;">Ask questions across all collections — AI writes the MongoDB aggregation pipeline</div>
+            </div>
+          </div>
+
+          <textarea id="agg-description-input" class="field" rows="3"
+            style="width:100%;resize:none;font-size:0.875rem;line-height:1.6;padding:12px 16px;border-radius:8px;background:#111009;"
+            placeholder="e.g. How many contacts per group? Show average age by country…"></textarea>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:12px;">
+            <button id="agg-preview-btn" class="btn-brand">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run Analysis
+            </button>
+          </div>
+        </div>
+
+        <!-- Aggregation Results -->
+        <div id="agg-results" class="panel rise-1" style="display:none;margin-bottom:20px;overflow:hidden;">
+          <!-- Header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #2e2920;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="stat-pill" id="agg-count">0 rows</span>
+              <span class="elapsed-badge" id="agg-elapsed" style="display:none;">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <span id="agg-elapsed-text"></span>
+              </span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="btn-ghost" id="agg-toggle-pipeline-btn">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                View pipeline
+              </button>
+              <button class="btn-ghost" id="agg-clear-btn">Dismiss</button>
+            </div>
+          </div>
+
+          <!-- Zero-result hint -->
+          <div id="agg-hint" style="display:none;padding:10px 20px;border-bottom:1px solid #2e2920;background:#221e14;align-items:center;gap:8px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="agg-hint-text" style="font-size:0.78rem;color:#c8a96e;"></span>
+          </div>
+
+          <!-- Pipeline panel (collapsed by default) -->
+          <div id="agg-pipeline-panel" style="display:none;padding:16px 20px;border-bottom:1px solid #2e2920;">
+            <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:#585048;font-weight:600;margin-bottom:8px;font-family:'IBM Plex Mono',monospace;">Generated Aggregation Pipeline</div>
+            <pre id="agg-pipeline-display" class="query-code"></pre>
+          </div>
+
+          <!-- Table -->
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead><tr id="agg-head"></tr></thead>
+              <tbody id="agg-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /section-aggregations -->
+
       <!-- ══════════ CONTACTS SECTION ══════════ -->
       <div id="section-contacts" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;" class="rise">
@@ -644,15 +722,16 @@
   // ── Section switching ──────────────────────────────────────────────────────
 
   function showSection(name) {
-    ['segments','contacts'].forEach(s => {
+    ['segments','aggregations','contacts'].forEach(s => {
       document.getElementById(`section-${s}`).style.display = s === name ? 'block' : 'none';
       const btn = document.getElementById(`nav-${s}`);
       btn.classList.toggle('active', s === name);
     });
 
     const meta = {
-      segments: ['Segments', 'Describe an audience in plain English — AI translates it into a contact filter'],
-      contacts: ['Contacts', 'Browse and search all contacts across the active CRM'],
+      segments:     ['Segments',     'Describe an audience in plain English — AI translates it into a contact filter'],
+      aggregations: ['Aggregations', 'Ask analytical questions across collections — AI writes the MongoDB pipeline'],
+      contacts:     ['Contacts',     'Browse and search all contacts across the active CRM'],
     };
     document.getElementById('page-title').textContent = meta[name][0];
     document.getElementById('page-sub').textContent   = meta[name][1];
@@ -974,6 +1053,76 @@
     for (let i = current-2; i <= current+2; i++) if (i>0 && i<=total) pages.add(i);
     return [...pages].sort((a,b)=>a-b);
   }
+
+  // ── Aggregations ───────────────────────────────────────────────────────────
+
+  document.getElementById('agg-preview-btn').addEventListener('click', async () => {
+    const desc = document.getElementById('agg-description-input').value.trim();
+    if (!desc) return;
+
+    const btn = document.getElementById('agg-preview-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Thinking…`;
+    document.getElementById('agg-results').style.display = 'none';
+
+    try {
+      const res  = await fetch(`${API}/aggregations/preview`, {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ description: desc }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error ?? `Error ${res.status}`); return; }
+
+      document.getElementById('agg-count').textContent = `${data.total} row${data.total !== 1 ? 's' : ''}`;
+
+      const elapsed = document.getElementById('agg-elapsed');
+      document.getElementById('agg-elapsed-text').textContent = formatElapsed(data.elapsedMs);
+      elapsed.style.display = data.elapsedMs != null ? 'inline-flex' : 'none';
+
+      const hintEl = document.getElementById('agg-hint');
+      if (data.hint) {
+        document.getElementById('agg-hint-text').textContent = data.hint;
+        hintEl.style.display = 'flex';
+      } else {
+        hintEl.style.display = 'none';
+      }
+
+      try {
+        document.getElementById('agg-pipeline-display').textContent =
+          JSON.stringify(JSON.parse(data.generatedPipeline), null, 2);
+      } catch {
+        document.getElementById('agg-pipeline-display').textContent = data.generatedPipeline;
+      }
+
+      renderTable('agg-head', document.getElementById('agg-body'), data.results);
+      document.getElementById('agg-results').style.display = 'block';
+
+    } catch (e) {
+      alert(`Request failed: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Analysis`;
+    }
+  });
+
+  document.getElementById('agg-toggle-pipeline-btn').addEventListener('click', () => {
+    const panel = document.getElementById('agg-pipeline-panel');
+    const btn   = document.getElementById('agg-toggle-pipeline-btn');
+    const open  = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    btn.innerHTML = open
+      ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> View pipeline`
+      : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Hide pipeline`;
+  });
+
+  document.getElementById('agg-clear-btn').addEventListener('click', () => {
+    document.getElementById('agg-results').style.display          = 'none';
+    document.getElementById('agg-description-input').value        = '';
+    document.getElementById('agg-pipeline-panel').style.display   = 'none';
+    document.getElementById('agg-toggle-pipeline-btn').innerHTML  =
+      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> View pipeline`;
+  });
 
   // ── Boot ───────────────────────────────────────────────────────────────────
   loadTenants();
